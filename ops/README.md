@@ -34,10 +34,13 @@ systemctl --user enable --now cursor-slack@cleo
 ## Slack app
 
 1. api.slack.com → Create from manifest → paste [`manifest.socket.json`](../manifest.socket.json)
-2. Enable Socket Mode; create app-level token `connections:write`
-3. Install app; copy `xoxb-` + `xapp-` into `cleo.env`
-4. **Do not** enable Agents / `agent_view`
-5. Reuse existing Cleo app tokens if cutting over from NanoClaw
+2. **Enable Socket Mode** in the app settings (required); create app-level token `connections:write`
+3. Event Subscriptions: `message.im`, `app_mention`, `message.channels`, `message.groups`
+4. Install app; copy `xoxb-` + `xapp-` into `cleo.env`
+5. **Do not** enable Agents / `agent_view`
+6. Reuse existing Cleo app tokens if cutting over from NanoClaw
+
+Bolt may log `Socket Mode is not turned on` if the toggle is off in the UI even when an `xapp-` token exists — flip Socket Mode on and restart the unit.
 
 ## Cutover
 
