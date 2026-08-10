@@ -1,0 +1,18 @@
+[Unit]
+Description=Cursor Slack bridge (%i)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/cursor-slack-bridge
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+Environment=CURSOR_SLACK_ENV=%h/.config/cursor-slack/%i.env
+Environment=DOTENV_CONFIG_PATH=%h/.config/cursor-slack/%i.env
+ExecStart=/usr/bin/node %h/cursor-slack-bridge/dist/index.js
+Restart=on-failure
+RestartSec=5
+Nice=5
+
+[Install]
+WantedBy=default.target
