@@ -1,7 +1,10 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { createInterface } from "node:readline";
+import { extractAssistantText } from "./stream-events.js";
 
 type ActiveChild = ChildProcess & { __markStopped?: () => void };
+
+export { extractAssistantText };
 
 export interface RunPromptOptions {
   agentBin: string;
@@ -32,11 +35,19 @@ function runCapture(
   args: string[],
   env: NodeJS.ProcessEnv,
   timeoutSeconds: number,
+  opts?: { earlyResolveWhen?: (stdout: string) => boolean },
 ): Promise<{ stdout: string; stderr: string; code: number | null }> {
   return new Promise((resolve, reject) => {
     const child = spawn(bin, args, { env, stdio: ["ignore", "pipe", "pipe"] });
     let stdout = "";
     let stderr = "";
+    let settled = false;
+    const finish = (code: number | null) => {
+      if (settled) return;
+      settled = true;
+      if (timer) clearTimeout(timer);
+      resolve({ stdout, stderr, code });
+    };
     const timer =
       timeoutSeconds > 0
         ? setTimeout(() => {
@@ -45,63 +56,31 @@ function runCapture(
         : undefined;
     child.stdout.on("data", (d: Buffer) => {
       stdout += d.toString();
+      if (opts?.earlyResolveWhen?.(stdout)) {
+        child.kill("SIGTERM");
+      }
     });
     child.stderr.on("data", (d: Buffer) => {
       stderr += d.toString();
     });
     child.on("error", (err) => {
       if (timer) clearTimeout(timer);
-      reject(err);
+      if (!settled) {
+        settled = true;
+        reject(err);
+      }
     });
     child.on("close", (code) => {
-      if (timer) clearTimeout(timer);
-      resolve({ stdout, stderr, code });
+      finish(code);
     });
   });
 }
 
-function extractAssistantText(streamJsonLines: string[]): string {
-  const parts: string[] = [];
-  for (const line of streamJsonLines) {
-    const trimmed = line.trim();
-    if (!trimmed.startsWith("{")) continue;
-    try {
-      const obj = JSON.parse(trimmed) as {
-        type?: string;
-        message?: { role?: string; content?: unknown };
-        content?: string;
-        text?: string;
-        result?: string;
-      };
-      if (obj.type === "assistant" && obj.message?.content) {
-        const c = obj.message.content;
-        if (typeof c === "string") parts.push(c);
-        else if (Array.isArray(c)) {
-          for (const block of c) {
-            if (block && typeof block === "object" && "text" in block) {
-              parts.push(String((block as { text: string }).text));
-            }
-          }
-        }
-      } else if (obj.type === "result" && typeof obj.result === "string") {
-        parts.push(obj.result);
-      } else if (typeof obj.text === "string" && obj.type === "assistant") {
-        parts.push(obj.text);
-      }
-    } catch {
-      // ignore non-json
-    }
-  }
-  // Prefer last substantial assistant aggregation
-  const joined = parts.join("").trim();
-  if (joined) return joined;
-  // Fallback: last non-empty plain lines that aren't json
-  const plain = streamJsonLines
-    .map((l) => l.trim())
-    .filter((l) => l && !l.startsWith("{"))
-    .join("\n")
-    .trim();
-  return plain;
+const CHAT_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function parseChatId(stdout: string): string | undefined {
+  const first = stdout.trim().split(/\s+/)[0];
+  return first && CHAT_ID_RE.test(first) ? first : undefined;
 }
 
 export class CursorAgentRunner implements AgentRunner {
@@ -110,17 +89,19 @@ export class CursorAgentRunner implements AgentRunner {
   async createChat(agentBin: string, workspace: string, cursorApiKey?: string): Promise<string> {
     const env = { ...process.env };
     if (cursorApiKey) env.CURSOR_API_KEY = cursorApiKey;
+    // agent create-chat often prints the UUID then hangs; kill early and accept UUID on non-zero exit.
     const { stdout, stderr, code } = await runCapture(
       agentBin,
       ["create-chat", "--workspace", workspace, "--trust", "--force"],
       env,
-      60,
+      25,
+      { earlyResolveWhen: (out) => Boolean(parseChatId(out)) },
     );
-    const chatId = stdout.trim().split(/\s+/)[0];
-    if (code !== 0 || !chatId) {
-      throw new Error(`create-chat failed: ${stderr || stdout || `exit ${code}`}`);
+    const chatId = parseChatId(stdout);
+    if (chatId) {
+      return chatId;
     }
-    return chatId;
+    throw new Error(`create-chat failed: ${stderr || stdout || `exit ${code}`}`);
   }
 
   async runPrompt(opts: RunPromptOptions): Promise<RunPromptResult> {

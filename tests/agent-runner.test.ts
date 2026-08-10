@@ -7,7 +7,7 @@ vi.mock("node:child_process", () => ({
 }));
 
 import { spawn } from "node:child_process";
-import { CursorAgentRunner } from "../src/agent-runner.js";
+import { CursorAgentRunner, extractAssistantText } from "../src/agent-runner.js";
 
 const mockedSpawn = vi.mocked(spawn);
 
@@ -49,10 +49,28 @@ describe("CursorAgentRunner", () => {
     mockedSpawn.mockImplementation((bin, args) => {
       expect(bin).toBe("agent");
       expect(args).toEqual(["create-chat", "--workspace", "/ws", "--trust", "--force"]);
-      return fakeChild({ stdoutText: "chat-123\n" }) as never;
+      return fakeChild({
+        stdoutText: "2ebc41d7-5857-4ebd-9577-092d90e287e8\n",
+      }) as never;
     });
     const r = new CursorAgentRunner();
-    await expect(r.createChat("agent", "/ws")).resolves.toBe("chat-123");
+    await expect(r.createChat("agent", "/ws")).resolves.toBe(
+      "2ebc41d7-5857-4ebd-9577-092d90e287e8",
+    );
+  });
+
+  it("create-chat accepts UUID even when process exits non-zero", async () => {
+    mockedSpawn.mockImplementation(
+      () =>
+        fakeChild({
+          stdoutText: "9e4e0a64-cd41-4304-9d71-bb43443f2e2c\n",
+          code: 15, // SIGTERM after hang
+        }) as never,
+    );
+    const r = new CursorAgentRunner();
+    await expect(r.createChat("agent", "/ws")).resolves.toBe(
+      "9e4e0a64-cd41-4304-9d71-bb43443f2e2c",
+    );
   });
 
   it("runPrompt includes --resume when chat exists", async () => {
@@ -88,9 +106,11 @@ describe("CursorAgentRunner", () => {
       calls++;
       const a = args as string[];
       if (a[0] === "create-chat") {
-        return fakeChild({ stdoutText: "created-1\n" }) as never;
+        return fakeChild({
+          stdoutText: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee\n",
+        }) as never;
       }
-      expect(a).toContain("created-1");
+      expect(a).toContain("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee");
       return fakeChild({
         stdoutText: JSON.stringify({ type: "result", result: "done" }) + "\n",
       }) as never;
@@ -104,7 +124,7 @@ describe("CursorAgentRunner", () => {
       timeoutSeconds: 30,
     });
     expect(calls).toBeGreaterThanOrEqual(2);
-    expect(result.chatId).toBe("created-1");
+    expect(result.chatId).toBe("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee");
   });
 
   it("stop kills active pid", async () => {
@@ -127,6 +147,22 @@ describe("CursorAgentRunner", () => {
     expect(child?.kill).toHaveBeenCalled();
     const result = await p;
     expect(result.status).toBe("stopped");
+  });
+
+  it("extractAssistantText prefers last assistant over joined result", () => {
+    expect(
+      extractAssistantText([
+        JSON.stringify({
+          type: "assistant",
+          message: { content: [{ type: "text", text: "preamble" }] },
+        }),
+        JSON.stringify({
+          type: "assistant",
+          message: { content: [{ type: "text", text: "final" }] },
+        }),
+        JSON.stringify({ type: "result", result: "preamblefinal" }),
+      ]),
+    ).toBe("final");
   });
 
   it("propagates non-zero exit without text as error", async () => {

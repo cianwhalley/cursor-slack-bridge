@@ -19,8 +19,21 @@ export interface BridgeConfig {
   openChannels: Set<string>;
   typingReaction: string;
   textChunkLimit: number;
-  keepaliveSeconds: number;
-  keepaliveThresholdSeconds: number;
+  /** OpenClaw-style: off | progress (one editable draft). */
+  streamingMode: "off" | "progress";
+  /** Seconds before creating the progress draft (OpenClaw ~1.5). */
+  draftDelaySeconds: number;
+  /** Refresh assistant.threads.setStatus while running (default 90). */
+  statusKeepaliveSeconds: number;
+  maxProgressLines: number;
+  maxLineChars: number;
+  progressLabel: string;
+  /** OpenClaw agents.defaults.toolProgressDetail */
+  toolProgressDetail: "explain" | "raw";
+  /** OpenClaw streaming.progress.commandText */
+  progressCommandText: "raw" | "status";
+  /** OpenClaw streaming.progress.commentary (default false). */
+  progressCommentary: boolean;
   sessionTimeoutSeconds: number;
   botUserId: string | undefined;
 }
@@ -87,11 +100,39 @@ export function loadConfig(envPath?: string): BridgeConfig {
     openChannels: parseIdList(process.env.OPEN_CHANNELS, "OPEN_CHANNELS"),
     typingReaction: process.env.TYPING_REACTION?.trim() || "hourglass_flowing_sand",
     textChunkLimit: Number(process.env.TEXT_CHUNK_LIMIT ?? "3500"),
-    keepaliveSeconds: Number(process.env.KEEPALIVE_SECONDS ?? "45"),
-    keepaliveThresholdSeconds: Number(process.env.KEEPALIVE_THRESHOLD_SECONDS ?? "30"),
+    streamingMode: parseStreamingMode(process.env.STREAMING_MODE),
+    draftDelaySeconds: Number(process.env.DRAFT_DELAY_SECONDS ?? "1.5"),
+    statusKeepaliveSeconds: Number(process.env.STATUS_KEEPALIVE_SECONDS ?? "90"),
+    maxProgressLines: Number(process.env.MAX_PROGRESS_LINES ?? "8"),
+    maxLineChars: Number(process.env.MAX_LINE_CHARS ?? "120"),
+    progressLabel: process.env.PROGRESS_LABEL?.trim() || "Working",
+    toolProgressDetail: parseEnum(process.env.TOOL_PROGRESS_DETAIL, ["explain", "raw"], "explain"),
+    progressCommandText: parseEnum(process.env.PROGRESS_COMMAND_TEXT, ["raw", "status"], "raw"),
+    progressCommentary: parseBool(process.env.PROGRESS_COMMENTARY, false),
     sessionTimeoutSeconds: Number(process.env.SESSION_TIMEOUT_SECONDS ?? "900"),
     botUserId: process.env.BOT_USER_ID?.trim() || undefined,
   };
+}
+
+function parseStreamingMode(raw: string | undefined): "off" | "progress" {
+  const value = (raw ?? "progress").trim().toLowerCase();
+  if (value === "off" || value === "progress") return value;
+  throw new Error(`STREAMING_MODE must be off|progress, got ${JSON.stringify(raw)}`);
+}
+
+function parseEnum<T extends string>(raw: string | undefined, allowed: readonly T[], fallback: T): T {
+  if (!raw?.trim()) return fallback;
+  const value = raw.trim().toLowerCase() as T;
+  if ((allowed as readonly string[]).includes(value)) return value;
+  throw new Error(`expected ${allowed.join("|")}, got ${JSON.stringify(raw)}`);
+}
+
+function parseBool(raw: string | undefined, fallback: boolean): boolean {
+  if (raw === undefined || raw.trim() === "") return fallback;
+  const v = raw.trim().toLowerCase();
+  if (v === "1" || v === "true" || v === "yes" || v === "on") return true;
+  if (v === "0" || v === "false" || v === "no" || v === "off") return false;
+  throw new Error(`expected boolean, got ${JSON.stringify(raw)}`);
 }
 
 /** Exported for tests */

@@ -23,8 +23,15 @@ function cfg(): BridgeConfig {
     openChannels: new Set(),
     typingReaction: "hourglass_flowing_sand",
     textChunkLimit: 3500,
-    keepaliveSeconds: 45,
-    keepaliveThresholdSeconds: 0,
+    streamingMode: "progress",
+    draftDelaySeconds: -1, // disable auto-draft in router tests unless opted in
+    statusKeepaliveSeconds: 0,
+    maxProgressLines: 8,
+    maxLineChars: 120,
+    progressLabel: "Working",
+    toolProgressDetail: "explain",
+    progressCommandText: "raw",
+    progressCommentary: false,
     sessionTimeoutSeconds: 900,
     botUserId: bot,
   };
@@ -49,7 +56,10 @@ function mockSlack() {
       poster: {
         post: vi.fn(async (channel: string, text: string, threadTs?: string) => {
           posts.push({ channel, text, thread: threadTs });
+          return `p${posts.length}.0`;
         }),
+        update: vi.fn(async () => {}),
+        delete: vi.fn(async () => {}),
       },
     },
   };

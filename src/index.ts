@@ -32,11 +32,27 @@ async function main(): Promise<void> {
     },
     poster: {
       async post(channel: string, text: string, threadTs?: string) {
-        await web.chat.postMessage({
+        const res = await web.chat.postMessage({
           channel,
           text,
           thread_ts: threadTs,
           mrkdwn: true,
+        });
+        return typeof res.ts === "string" ? res.ts : undefined;
+      },
+      async update(channel: string, ts: string, text: string) {
+        await web.chat.update({ channel, ts, text });
+      },
+      async delete(channel: string, ts: string) {
+        await web.chat.delete({ channel, ts });
+      },
+    },
+    assistantStatus: {
+      async setStatus(channel: string, threadTs: string, status: string) {
+        await web.assistant.threads.setStatus({
+          channel_id: channel,
+          thread_ts: threadTs,
+          status,
         });
       },
     },

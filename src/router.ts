@@ -7,12 +7,19 @@ import {
   slackPromptPrefix,
   type SlackEventLike,
 } from "./policy.js";
-import { ProgressTracker, type SlackPoster, type SlackReactions } from "./progress.js";
+import {
+  ProgressTracker,
+  type SlackAssistantStatus,
+  type SlackPoster,
+  type SlackReactions,
+} from "./progress.js";
+import { progressFromStreamLine } from "./stream-events.js";
 import type { SessionStore } from "./sessions.js";
 
 export interface SlackClient {
   reactions: SlackReactions;
   poster: SlackPoster;
+  assistantStatus?: SlackAssistantStatus;
   authBotUserId?: string;
 }
 
@@ -119,22 +126,33 @@ export class MessageRouter {
     threadKey: string,
   ): Promise<void> {
     const { config, sessions, runner, slack } = this.deps;
-    const progress = new ProgressTracker(
-      slack.reactions,
-      slack.poster,
-      decision.channelId,
-      decision.messageTs,
+    const progress = new ProgressTracker({
+      reactions: slack.reactions,
+      poster: slack.poster,
+      assistantStatus: slack.assistantStatus,
+      channelId: decision.channelId,
+      messageTs: decision.messageTs,
       replyThreadTs,
-      config.typingReaction,
-      config.keepaliveThresholdSeconds,
-      config.keepaliveSeconds,
-    );
+      typingReaction: config.typingReaction,
+      streamingMode: config.streamingMode,
+      draftDelaySeconds: config.draftDelaySeconds,
+      statusKeepaliveSeconds: config.statusKeepaliveSeconds,
+      maxProgressLines: config.maxProgressLines,
+      maxLineChars: config.maxLineChars,
+      progressLabel: config.progressLabel,
+      textChunkLimit: config.textChunkLimit,
+    });
     await progress.start();
 
+    const postChunks = async (text: string) => {
+      const chunks = chunkText(text, config.textChunkLimit);
+      for (const chunk of chunks) {
+        await slack.poster.post(decision.channelId, chunk, replyThreadTs);
+      }
+    };
+
     try {
-      let session = sessions.get(channelId, threadKey);
-      let chatId = session?.cursorChatId;
-      const isNew = !chatId;
+      let chatId = sessions.get(channelId, threadKey)?.cursorChatId;
 
       if (!chatId) {
         chatId = await runner.createChat(config.agentBin, config.workspace, config.cursorApiKey);
@@ -158,6 +176,17 @@ export class MessageRouter {
         prompt,
         cursorApiKey: config.cursorApiKey,
         timeoutSeconds: config.sessionTimeoutSeconds,
+        onStdoutLine: (line) => {
+          const ev = progressFromStreamLine(line, {
+            detailMode: config.toolProgressDetail,
+            commandText: config.progressCommandText,
+            maxLineChars: config.maxLineChars,
+            commentary: config.progressCommentary,
+          });
+          if (ev) {
+            void progress.noteProgress(ev.line, ev.statusPhrase);
+          }
+        },
       });
       this.activeRunKeys.delete(sessionKey);
 
@@ -166,11 +195,7 @@ export class MessageRouter {
       }
 
       if (result.status === "ok" || (result.text && result.status !== "error")) {
-        const chunks = chunkText(result.text || "_No text response._", config.textChunkLimit);
-        for (const chunk of chunks) {
-          await slack.poster.post(decision.channelId, chunk, replyThreadTs);
-        }
-        await progress.succeed();
+        await progress.succeed(result.text || "_No text response._", postChunks);
       } else {
         const errText =
           result.status === "timeout"
@@ -178,20 +203,14 @@ export class MessageRouter {
             : result.status === "stopped"
               ? "Stopped."
               : `Agent error: ${result.text || result.stderr || "unknown"}`;
-        await slack.poster.post(decision.channelId, errText, replyThreadTs);
-        await progress.fail();
+        await progress.fail(errText, postChunks);
       }
-
-      // silence unused
-      void isNew;
     } catch (err) {
       this.activeRunKeys.delete(sessionKey);
-      await slack.poster.post(
-        decision.channelId,
+      await progress.fail(
         `Bridge error: ${err instanceof Error ? err.message : String(err)}`,
-        replyThreadTs,
+        postChunks,
       );
-      await progress.fail();
     }
   }
 }

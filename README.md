@@ -15,6 +15,15 @@ pnpm build
 CURSOR_SLACK_ENV=.env pnpm start
 ```
 
+## Slack UX (OpenClaw-aligned)
+
+- Ack reaction on the user message → ✅ / ❌
+- `STREAMING_MODE=progress` (default): one editable draft (`Working` + tool lines); final replaces it in place
+- Tool lines use OpenClaw explain formatting (Cursor `description` / human labels — not raw `cd && export …`)
+- Defaults: `TOOL_PROGRESS_DETAIL=explain`, `PROGRESS_COMMENTARY=false` (no thinking/preamble in draft)
+- Threaded replies: also refresh `assistant.threads.setStatus` (top-level DMs stay draft-only)
+- Final text = last Cursor assistant bubble (not concatenated `result`, not thinking)
+
 ## Docs
 
 - Slack app manifest: [`manifest.socket.json`](manifest.socket.json)
