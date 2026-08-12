@@ -24,6 +24,7 @@ CURSOR_SLACK_ENV=.env pnpm start
 - Tool lines use OpenClaw explain formatting (Cursor `description` / human labels — not raw `cd && export …`)
 - Defaults: `TOOL_PROGRESS_DETAIL=explain`, `PROGRESS_COMMENTARY=false` (no thinking/preamble in draft)
 - Threaded replies: also refresh `assistant.threads.setStatus` (top-level DMs stay draft-only)
+- Scheduled posts (same bot token) subscribe the thread so allowlisted humans can reply without a second @mention
 - Final text = last Cursor assistant bubble (not concatenated `result`, not thinking)
 
 ## Docs

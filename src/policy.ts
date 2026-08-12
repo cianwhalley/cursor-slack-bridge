@@ -54,8 +54,26 @@ export function slackPromptPrefix(isDm: boolean, channelId: string): string {
 }
 
 /**
+ * Scheduled / bot-token posts (silas-tick, cleo-tick) use the same Slack user as
+ * the interactive bridge. Subscribe that thread so allowlisted humans can reply
+ * without a second @mention. Never wakes the agent.
+ */
+export function ownOutboundThreadTs(
+  event: SlackEventLike,
+  botUserId: string | undefined,
+): { channelId: string; threadTs: string } | null {
+  const channelId = event.channel?.trim() ?? "";
+  const messageTs = event.ts?.trim() ?? "";
+  if (!channelId || !messageTs) return null;
+  if (isDmChannel(channelId, event.channel_type)) return null;
+  if (!botUserId || event.user !== botUserId) return null;
+  return { channelId, threadTs: (event.thread_ts || messageTs).trim() };
+}
+
+/**
  * Decide whether this Slack event should wake the Cursor agent.
- * Channel replies continue without re-mention only if we already participated in that thread.
+ * Channel replies continue without re-mention only if we already participated in that thread
+ * (interactive turn or our own outbound post).
  */
 export function shouldEngage(
   event: SlackEventLike,

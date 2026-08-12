@@ -146,13 +146,28 @@ describe("MessageRouter", () => {
     const c = cfg();
     const sessions = new SessionStore(c.sessionDb);
     const router = new MessageRouter({ config: c, sessions, runner, slack: slack.client });
+    expect(runner.runPrompt).not.toHaveBeenCalled();
+    sessions.close();
+  });
+
+  it("own channel post subscribes the thread without waking the agent", async () => {
+    const slack = mockSlack();
+    const runner: AgentRunner = {
+      createChat: vi.fn(),
+      runPrompt: vi.fn(),
+      stop: vi.fn(() => false),
+    };
+    const c = cfg();
+    const sessions = new SessionStore(c.sessionDb);
+    const router = new MessageRouter({ config: c, sessions, runner, slack: slack.client });
     await router.process({
       channel: "C_SYSOPS",
-      user: "U1",
-      text: "no mention",
-      ts: "1",
+      user: bot,
+      text: "*repo-hygiene* attention",
+      ts: "99.1",
     });
     expect(runner.runPrompt).not.toHaveBeenCalled();
+    expect(sessions.hasParticipated("C_SYSOPS", "99.1")).toBe(true);
     sessions.close();
   });
 

@@ -3,6 +3,7 @@ import type { AgentRunner } from "./agent-runner.js";
 import { buildPrompt, chunkText } from "./format.js";
 import {
   isBridgeCommand,
+  ownOutboundThreadTs,
   shouldEngage,
   slackPromptPrefix,
   type SlackEventLike,
@@ -52,6 +53,12 @@ export class MessageRouter {
     const { config, sessions, runner, slack } = this.deps;
     const botUserId = config.botUserId ?? slack.authBotUserId;
     const cfg: BridgeConfig = { ...config, botUserId };
+
+    const own = ownOutboundThreadTs(event, botUserId);
+    if (own) {
+      sessions.markParticipated(own.channelId, own.threadTs);
+      return;
+    }
 
     const decision = shouldEngage(event, cfg, sessions);
     if (!decision.engage) {

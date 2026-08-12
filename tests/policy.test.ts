@@ -3,6 +3,7 @@ import type { BridgeConfig } from "../src/config.js";
 import { _testing } from "../src/config.js";
 import {
   isBridgeCommand,
+  ownOutboundThreadTs,
   shouldEngage,
   stripBotMention,
   type ThreadParticipationStore,
@@ -156,6 +157,30 @@ describe("shouldEngage", () => {
       memParticipation(),
     );
     expect(d).toEqual({ engage: false, reason: "mention_required" });
+  });
+
+  it("ownOutboundThreadTs subscribes our channel posts, not DMs or other users", () => {
+    expect(
+      ownOutboundThreadTs(
+        { channel: "C_SYSOPS", user: bot, text: "tick", ts: "99.1" },
+        bot,
+      ),
+    ).toEqual({ channelId: "C_SYSOPS", threadTs: "99.1" });
+    expect(
+      ownOutboundThreadTs(
+        { channel: "C_SYSOPS", user: bot, text: "in thread", ts: "100.1", thread_ts: "99.1" },
+        bot,
+      ),
+    ).toEqual({ channelId: "C_SYSOPS", threadTs: "99.1" });
+    expect(
+      ownOutboundThreadTs({ channel: "D123", user: bot, text: "dm", ts: "1" }, bot),
+    ).toBeNull();
+    expect(
+      ownOutboundThreadTs(
+        { channel: "C_SYSOPS", user: "U_ALLOW", text: "hi", ts: "1" },
+        bot,
+      ),
+    ).toBeNull();
   });
 
   it("ignores unconfigured channels", () => {

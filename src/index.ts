@@ -38,7 +38,11 @@ async function main(): Promise<void> {
           thread_ts: threadTs,
           mrkdwn: true,
         });
-        return typeof res.ts === "string" ? res.ts : undefined;
+        const ts = typeof res.ts === "string" ? res.ts : undefined;
+        if (ts && !channel.startsWith("D")) {
+          sessions.markParticipated(channel, threadTs || ts);
+        }
+        return ts;
       },
       async update(channel: string, ts: string, text: string) {
         await web.chat.update({ channel, ts, text });
@@ -84,7 +88,7 @@ async function main(): Promise<void> {
       thread_ts?: string;
       channel_type?: string;
     };
-    if (ev.subtype && ev.subtype !== "file_share") {
+    if (ev.subtype && ev.subtype !== "file_share" && ev.subtype !== "bot_message") {
       return;
     }
     // Return immediately — Bolt acks the Socket Mode envelope; work is async.
