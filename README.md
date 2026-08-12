@@ -17,8 +17,10 @@ CURSOR_SLACK_ENV=.env pnpm start
 
 ## Slack UX (OpenClaw-aligned)
 
-- Ack reaction on the user message → ✅ / ❌
-- `STREAMING_MODE=progress` (default): one editable draft (`Working` + tool lines); final replaces it in place
+- Ack reaction on the user message (⏳) → ✅ / ❌
+- `STREAMING_MODE=progress` (default): one editable draft (`Working…` + tool lines); final replaces it in place
+- If you send another message while a run is in progress: immediate “still working… send `stop` to cancel” (do not assume silence means the bot is dead)
+- `stop` in that DM/thread kills the active agent run
 - Tool lines use OpenClaw explain formatting (Cursor `description` / human labels — not raw `cd && export …`)
 - Defaults: `TOOL_PROGRESS_DETAIL=explain`, `PROGRESS_COMMENTARY=false` (no thinking/preamble in draft)
 - Threaded replies: also refresh `assistant.threads.setStatus` (top-level DMs stay draft-only)

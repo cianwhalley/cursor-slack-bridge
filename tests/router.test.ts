@@ -201,12 +201,15 @@ describe("MessageRouter", () => {
     const c = cfg();
     const sessions = new SessionStore(c.sessionDb);
     const router = new MessageRouter({ config: c, sessions, runner, slack: slack.client });
-    await Promise.all([
-      router.process({ channel: "D1", user: "U1", text: "a", ts: "1" }),
-      router.process({ channel: "D1", user: "U1", text: "b", ts: "2" }),
-    ]);
+    const first = router.process({ channel: "D1", user: "U1", text: "a", ts: "1" });
+    await new Promise((r) => setTimeout(r, 10));
+    const second = router.process({ channel: "D1", user: "U1", text: "b", ts: "2" });
+    await Promise.all([first, second]);
     expect(maxConcurrent).toBe(1);
     expect(runner.runPrompt).toHaveBeenCalledTimes(2);
+    expect(
+      slack.posts.some((p) => p.text.includes("Still working on your last message")),
+    ).toBe(true);
     sessions.close();
   });
 });

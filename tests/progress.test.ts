@@ -106,7 +106,8 @@ describe("ProgressTracker (OpenClaw-style)", () => {
     await p.start();
     await vi.advanceTimersByTimeAsync(1100);
     expect(posts.length).toBe(1);
-    expect(posts[0].text).toBe("Working");
+    expect(posts[0].text).toMatch(/^Working/);
+    expect(posts[0].text).toMatch(/stop/i);
 
     await p.noteProgress("🛠️ hostname");
     expect(updates.some((u) => u.text.startsWith("Working\n") && u.text.includes("hostname"))).toBe(

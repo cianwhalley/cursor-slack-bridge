@@ -77,8 +77,11 @@ export class ProgressTracker {
         this.opts.messageTs,
         this.opts.typingReaction,
       );
-    } catch {
-      // non-fatal
+    } catch (err) {
+      console.warn(
+        "[progress] reaction add failed:",
+        err instanceof Error ? err.message : String(err),
+      );
     }
 
     if (this.canStatus) {
@@ -204,8 +207,11 @@ export class ProgressTracker {
         this.opts.replyThreadTs,
       );
       this.draftTs = ts;
-    } catch {
-      // non-fatal
+    } catch (err) {
+      console.warn(
+        "[progress] draft post failed:",
+        err instanceof Error ? err.message : String(err),
+      );
     }
   }
 
@@ -221,7 +227,7 @@ export class ProgressTracker {
   private draftBody(): string {
     const label = this.opts.progressLabel.trim() || "Working";
     if (this.progressLines.length === 0) {
-      return label;
+      return `${label}…\n_Send \`stop\` to cancel._`;
     }
     // OpenClaw: label on top, rolling tool lines below (truncated per maxLineChars upstream).
     return [label, ...this.progressLines].join("\n");

@@ -101,7 +101,7 @@ export function loadConfig(envPath?: string): BridgeConfig {
     typingReaction: process.env.TYPING_REACTION?.trim() || "hourglass_flowing_sand",
     textChunkLimit: Number(process.env.TEXT_CHUNK_LIMIT ?? "3500"),
     streamingMode: parseStreamingMode(process.env.STREAMING_MODE),
-    draftDelaySeconds: Number(process.env.DRAFT_DELAY_SECONDS ?? "1.5"),
+    draftDelaySeconds: Number(process.env.DRAFT_DELAY_SECONDS ?? "0"),
     statusKeepaliveSeconds: Number(process.env.STATUS_KEEPALIVE_SECONDS ?? "90"),
     maxProgressLines: Number(process.env.MAX_PROGRESS_LINES ?? "8"),
     maxLineChars: Number(process.env.MAX_LINE_CHARS ?? "120"),

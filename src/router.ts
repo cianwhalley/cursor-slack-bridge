@@ -95,7 +95,42 @@ export class MessageRouter {
       await task();
       return;
     }
+    if (this.running.has(sessionKey)) {
+      await this.ackQueued(decision, replyThreadTs);
+    }
     await this.enqueue(sessionKey, task);
+  }
+
+  /** Visible ack while another turn is still running (otherwise Slack looks dead). */
+  private async ackQueued(
+    decision: Extract<ReturnType<typeof shouldEngage>, { engage: true }>,
+    replyThreadTs: string | undefined,
+  ): Promise<void> {
+    const { config, slack } = this.deps;
+    try {
+      await slack.reactions.add(
+        decision.channelId,
+        decision.messageTs,
+        config.typingReaction,
+      );
+    } catch (err) {
+      console.warn(
+        "[router] queued reaction failed:",
+        err instanceof Error ? err.message : String(err),
+      );
+    }
+    try {
+      await slack.poster.post(
+        decision.channelId,
+        "Still working on your last message — I'll take this next. Send `stop` to cancel.",
+        replyThreadTs,
+      );
+    } catch (err) {
+      console.warn(
+        "[router] queued notice failed:",
+        err instanceof Error ? err.message : String(err),
+      );
+    }
   }
 
   private async enqueue(sessionKey: string, task: QueueItem): Promise<void> {
