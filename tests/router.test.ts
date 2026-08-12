@@ -19,6 +19,7 @@ function cfg(): BridgeConfig {
     sessionDb: join(mkdtempSync(join(tmpdir(), "r-")), "s.db"),
     dmPolicy: "allowlist",
     allowedUserIds: new Set(["U1"]),
+    channelPolicy: "configured",
     alertChannels: new Set(["C_SYSOPS"]),
     openChannels: new Set(),
     typingReaction: "hourglass_flowing_sand",

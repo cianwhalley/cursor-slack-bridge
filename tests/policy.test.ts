@@ -20,12 +20,20 @@ function config(over: Partial<BridgeConfig> = {}): BridgeConfig {
     sessionDb: "/tmp/s.db",
     dmPolicy: "allowlist",
     allowedUserIds: new Set(["U_ALLOW"]),
+    channelPolicy: "configured",
     alertChannels: new Set(["C_SYSOPS"]),
     openChannels: new Set(),
     typingReaction: "hourglass_flowing_sand",
     textChunkLimit: 3500,
-    keepaliveSeconds: 45,
-    keepaliveThresholdSeconds: 30,
+    streamingMode: "off",
+    draftDelaySeconds: 0,
+    statusKeepaliveSeconds: 90,
+    maxProgressLines: 8,
+    maxLineChars: 120,
+    progressLabel: "Working",
+    toolProgressDetail: "explain",
+    progressCommandText: "raw",
+    progressCommentary: false,
     sessionTimeoutSeconds: 900,
     botUserId: bot,
     ...over,
@@ -157,6 +165,48 @@ describe("shouldEngage", () => {
       memParticipation(),
     );
     expect(d).toEqual({ engage: false, reason: "channel_not_configured" });
+  });
+
+  it("ignores channel @mention from a user not on the allowlist", () => {
+    const d = shouldEngage(
+      { channel: "C_SYSOPS", user: "U_OTHER", text: `<@${bot}> pwn`, ts: "1" },
+      config(),
+      memParticipation(),
+    );
+    expect(d).toEqual({ engage: false, reason: "user_not_allowlisted" });
+  });
+
+  it("ignores thread follow-up from a user not on the allowlist", () => {
+    const d = shouldEngage(
+      {
+        channel: "C_SYSOPS",
+        user: "U_OTHER",
+        text: "follow up",
+        ts: "100.1",
+        thread_ts: "99.1",
+      },
+      config(),
+      memParticipation([["C_SYSOPS", "99.1"]]),
+    );
+    expect(d).toEqual({ engage: false, reason: "user_not_allowlisted" });
+  });
+
+  it("CHANNEL_POLICY=any engages allowlisted @mention outside ALERT_CHANNELS", () => {
+    const d = shouldEngage(
+      { channel: "C_RANDOM", user: "U_ALLOW", text: `<@${bot}> hi`, ts: "1" },
+      config({ channelPolicy: "any" }),
+      memParticipation(),
+    );
+    expect(d.engage).toBe(true);
+  });
+
+  it("CHANNEL_POLICY=any still ignores non-allowlisted users", () => {
+    const d = shouldEngage(
+      { channel: "C_RANDOM", user: "U_OTHER", text: `<@${bot}> hi`, ts: "1" },
+      config({ channelPolicy: "any" }),
+      memParticipation(),
+    );
+    expect(d).toEqual({ engage: false, reason: "user_not_allowlisted" });
   });
 
   it("ignores empty text / missing channel", () => {
