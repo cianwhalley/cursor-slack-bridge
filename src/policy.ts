@@ -109,7 +109,11 @@ export function shouldEngage(
     };
   }
 
-  // Channels / groups
+  // Channels / groups — allowlist applies to mentions and thread follow-ups.
+  if (config.allowedUserIds.size > 0 && !config.allowedUserIds.has(userId)) {
+    return { engage: false, reason: "user_not_allowlisted" };
+  }
+
   const threadTs = (event.thread_ts || messageTs).trim();
   const isThreadReply = Boolean(event.thread_ts && event.thread_ts !== event.ts);
   const hasMention = mentionedBot(text, config.botUserId);
@@ -117,8 +121,8 @@ export function shouldEngage(
   const inAlert = config.alertChannels.has(channelId);
   const inOpen = config.openChannels.has(channelId);
 
-  // Only engage in configured channels (alert or open). Unknown channels ignored.
-  if (!inAlert && !inOpen) {
+  // configured: only ALERT/OPEN channels. any: every channel the bot can see.
+  if (!inAlert && !inOpen && config.channelPolicy !== "any") {
     return { engage: false, reason: "channel_not_configured" };
   }
 

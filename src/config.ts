@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 const SLACK_ID_RE = /^[UCDG][A-Z0-9]+$/;
 
 export type DmPolicy = "allowlist" | "open" | "disabled";
+export type ChannelPolicy = "configured" | "any";
 
 export interface BridgeConfig {
   slackBotToken: string;
@@ -14,6 +15,8 @@ export interface BridgeConfig {
   sessionDb: string;
   dmPolicy: DmPolicy;
   allowedUserIds: Set<string>;
+  /** configured = ALERT/OPEN channels only; any = every channel the bot is in (still allowlisted). */
+  channelPolicy: ChannelPolicy;
   alertChannels: Set<string>;
   /** Channels where any human message engages (empty = none; alert channels still require mention to start). */
   openChannels: Set<string>;
@@ -72,6 +75,14 @@ function parseDmPolicy(raw: string | undefined): DmPolicy {
   throw new Error(`DM_POLICY must be allowlist|open|disabled, got ${JSON.stringify(raw)}`);
 }
 
+function parseChannelPolicy(raw: string | undefined): ChannelPolicy {
+  const value = (raw ?? "configured").trim().toLowerCase();
+  if (value === "configured" || value === "any") {
+    return value;
+  }
+  throw new Error(`CHANNEL_POLICY must be configured|any, got ${JSON.stringify(raw)}`);
+}
+
 export function loadConfig(envPath?: string): BridgeConfig {
   if (envPath) {
     loadDotenv({ path: envPath });
@@ -82,9 +93,13 @@ export function loadConfig(envPath?: string): BridgeConfig {
   }
 
   const dmPolicy = parseDmPolicy(process.env.DM_POLICY);
+  const channelPolicy = parseChannelPolicy(process.env.CHANNEL_POLICY);
   const allowedUserIds = parseIdList(process.env.ALLOWED_USER_IDS, "ALLOWED_USER_IDS");
   if (dmPolicy === "allowlist" && allowedUserIds.size === 0) {
     throw new Error("DM_POLICY=allowlist requires ALLOWED_USER_IDS");
+  }
+  if (channelPolicy === "any" && allowedUserIds.size === 0) {
+    throw new Error("CHANNEL_POLICY=any requires ALLOWED_USER_IDS");
   }
 
   return {
@@ -96,6 +111,7 @@ export function loadConfig(envPath?: string): BridgeConfig {
     sessionDb: resolve(process.env.SESSION_DB?.trim() || "./cursor-slack.db"),
     dmPolicy,
     allowedUserIds,
+    channelPolicy,
     alertChannels: parseIdList(process.env.ALERT_CHANNELS, "ALERT_CHANNELS"),
     openChannels: parseIdList(process.env.OPEN_CHANNELS, "OPEN_CHANNELS"),
     typingReaction: process.env.TYPING_REACTION?.trim() || "hourglass_flowing_sand",
@@ -136,4 +152,4 @@ function parseBool(raw: string | undefined, fallback: boolean): boolean {
 }
 
 /** Exported for tests */
-export const _testing = { parseIdList, parseDmPolicy, SLACK_ID_RE };
+export const _testing = { parseIdList, parseDmPolicy, parseChannelPolicy, SLACK_ID_RE };
