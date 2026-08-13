@@ -10,7 +10,7 @@ The Slack bridge does not clone your company. It points Cursor at a **hub**. The
 | Contains | `SOUL.md`, `AGENTS.md`, `.cursor/rules`, skills, `config/repos.json`, optional `schedules/` | Application / docs repos |
 | Bridge `WORKSPACE` | This path | Not the `WORKSPACE`; listed in `repos.json` |
 
-Starter layout: [agent-hub-template](https://github.com/zenmindhacker/agent-hub-template).
+Starter layout: [agent-hub-template](https://github.com/cianwhalley/agent-hub-template).
 
 ## Instance = Slack app + env + hub path
 

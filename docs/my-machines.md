@@ -17,7 +17,7 @@ agent worker start \
   --idle-release-timeout 0
 ```
 
-A systemd unit for this lives in [agent-hub-template](https://github.com/zenmindhacker/agent-hub-template) (`ops/my-machines/`).
+A systemd unit for this lives in [agent-hub-template](https://github.com/cianwhalley/agent-hub-template) (`ops/my-machines/`).
 
 4. Confirm the machine at [cursor.com/agents](https://cursor.com/agents).
 5. From Cloud / phone: `worker=my-vps repo=you/your-hub pwd` — expect the VPS hostname and that hub path.

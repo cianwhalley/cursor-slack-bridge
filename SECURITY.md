@@ -6,7 +6,7 @@ The `main` branch is the only supported line until tagged releases exist.
 
 ## Reporting a vulnerability
 
-Use [GitHub Private Vulnerability Reporting](https://github.com/zenmindhacker/cursor-slack-bridge/security/advisories/new) on this repository.
+Use [GitHub Private Vulnerability Reporting](https://github.com/cianwhalley/cursor-slack-bridge/security/advisories/new) on this repository.
 
 Do **not** file a public issue for security problems.
 

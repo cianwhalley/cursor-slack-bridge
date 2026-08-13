@@ -2,7 +2,7 @@
 
 Production path: Ubuntu (or similar) VPS, systemd user unit, Slack Socket Mode, Cursor CLI, a **hub** git checkout as `WORKSPACE`.
 
-For a starter hub (persona, sibling repos, hygiene, optional tick) use [agent-hub-template](https://github.com/zenmindhacker/agent-hub-template). You can also point `WORKSPACE` at any Cursor project.
+For a starter hub (persona, sibling repos, hygiene, optional tick) use [agent-hub-template](https://github.com/cianwhalley/agent-hub-template). You can also point `WORKSPACE` at any Cursor project.
 
 ## Prerequisites
 
@@ -40,7 +40,7 @@ ssh cursor-agent@your-host
 As the service user:
 
 ```bash
-git clone https://github.com/zenmindhacker/agent-hub-template.git ~/workspaces/your-hub
+git clone https://github.com/cianwhalley/agent-hub-template.git ~/workspaces/your-hub
 # then: fill SOUL.md, config/repos.json — see the template README
 ```
 

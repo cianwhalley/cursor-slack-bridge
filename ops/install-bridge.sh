@@ -2,7 +2,7 @@
 # Run as the dedicated service user (not root) after bootstrap-service-user.sh.
 set -euo pipefail
 
-REPO_URL="${REPO_URL:-https://github.com/zenmindhacker/cursor-slack-bridge.git}"
+REPO_URL="${REPO_URL:-https://github.com/cianwhalley/cursor-slack-bridge.git}"
 HOME_DIR="${HOME}"
 BRIDGE_DIR="${BRIDGE_DIR:-$HOME_DIR/cursor-slack-bridge}"
 INSTANCE="${INSTANCE:-main}"

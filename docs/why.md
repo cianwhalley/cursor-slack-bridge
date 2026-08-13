@@ -20,7 +20,7 @@ The bridge is not a model router. It is Slack transport around the **headless Cu
 3. `agent create-chat` / `agent --resume` with `--workspace` set to your hub.
 4. Stream-json → one editable Slack draft → last assistant bubble as the reply.
 
-The hub (see [agent-hub-template](https://github.com/zenmindhacker/agent-hub-template)) is the brain. Cursor IDE / web / iOS use the same path via a My Machines worker. Scheduling lives in the hub as git, not as N Cloud Automations.
+The hub (see [agent-hub-template](https://github.com/cianwhalley/agent-hub-template)) is the brain. Cursor IDE / web / iOS use the same path via a My Machines worker. Scheduling lives in the hub as git, not as N Cloud Automations.
 
 ## Vs Cursor native Slack
 
