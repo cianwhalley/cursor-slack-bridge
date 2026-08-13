@@ -40,15 +40,32 @@ function fakeChild(opts: {
   return ee;
 }
 
-afterEach(() => {
-  mockedSpawn.mockReset();
-});
+  it("strips Slack tokens from child env", async () => {
+    process.env.SLACK_BOT_TOKEN = "xoxb-secret";
+    process.env.SLACK_APP_TOKEN = "xapp-secret";
+    mockedSpawn.mockImplementation((_bin, _args, spawnOpts) => {
+      expect(spawnOpts?.cwd).toBe("/ws");
+      expect(spawnOpts?.env?.SLACK_BOT_TOKEN).toBeUndefined();
+      expect(spawnOpts?.env?.SLACK_APP_TOKEN).toBeUndefined();
+      expect(spawnOpts?.env?.CURSOR_API_KEY).toBe("k-test");
+      return fakeChild({
+        stdoutText: "2ebc41d7-5857-4ebd-9577-092d90e287e8\n",
+      }) as never;
+    });
+    const r = new CursorAgentRunner();
+    await r.createChat("agent", "/ws", "k-test");
+    delete process.env.SLACK_BOT_TOKEN;
+    delete process.env.SLACK_APP_TOKEN;
+  });
 
 describe("CursorAgentRunner", () => {
   it("create-chat uses workspace trust force", async () => {
-    mockedSpawn.mockImplementation((bin, args) => {
+    mockedSpawn.mockImplementation((bin, args, spawnOpts) => {
       expect(bin).toBe("agent");
       expect(args).toEqual(["create-chat", "--workspace", "/ws", "--trust", "--force"]);
+      expect(spawnOpts).toMatchObject({ cwd: "/ws" });
+      expect(spawnOpts?.env).not.toHaveProperty("SLACK_BOT_TOKEN");
+      expect(spawnOpts?.env).not.toHaveProperty("SLACK_APP_TOKEN");
       return fakeChild({
         stdoutText: "2ebc41d7-5857-4ebd-9577-092d90e287e8\n",
       }) as never;
@@ -74,7 +91,7 @@ describe("CursorAgentRunner", () => {
   });
 
   it("runPrompt includes --resume when chat exists", async () => {
-    mockedSpawn.mockImplementation((_bin, args) => {
+    mockedSpawn.mockImplementation((_bin, args, spawnOpts) => {
       const a = args as string[];
       expect(a).toContain("--resume");
       expect(a).toContain("chat-existing");
@@ -82,6 +99,10 @@ describe("CursorAgentRunner", () => {
       expect(a).toContain("--trust");
       expect(a).toContain("--force");
       expect(a).toContain("--print");
+      expect(spawnOpts).toMatchObject({ cwd: "/ws" });
+      expect(spawnOpts?.env).not.toHaveProperty("SLACK_BOT_TOKEN");
+      expect(spawnOpts?.env).not.toHaveProperty("SLACK_APP_TOKEN");
+      expect(spawnOpts?.env?.CURSOR_API_KEY).toBe("k-test");
       const line = JSON.stringify({
         type: "assistant",
         message: { role: "assistant", content: [{ type: "text", text: "hi" }] },
@@ -94,6 +115,7 @@ describe("CursorAgentRunner", () => {
       workspace: "/ws",
       chatId: "chat-existing",
       prompt: "hello",
+      cursorApiKey: "k-test",
       timeoutSeconds: 30,
     });
     expect(result.status).toBe("ok");

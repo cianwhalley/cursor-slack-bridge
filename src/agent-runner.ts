@@ -30,15 +30,23 @@ export interface AgentRunner {
   stop(key: string): boolean;
 }
 
+function childEnv(cursorApiKey?: string): NodeJS.ProcessEnv {
+  const env = { ...process.env };
+  delete env.SLACK_BOT_TOKEN;
+  delete env.SLACK_APP_TOKEN;
+  if (cursorApiKey) env.CURSOR_API_KEY = cursorApiKey;
+  return env;
+}
+
 function runCapture(
   bin: string,
   args: string[],
   env: NodeJS.ProcessEnv,
   timeoutSeconds: number,
-  opts?: { earlyResolveWhen?: (stdout: string) => boolean },
+  opts?: { cwd?: string; earlyResolveWhen?: (stdout: string) => boolean },
 ): Promise<{ stdout: string; stderr: string; code: number | null }> {
   return new Promise((resolve, reject) => {
-    const child = spawn(bin, args, { env, stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn(bin, args, { env, cwd: opts?.cwd, stdio: ["ignore", "pipe", "pipe"] });
     let stdout = "";
     let stderr = "";
     let settled = false;
@@ -87,15 +95,14 @@ export class CursorAgentRunner implements AgentRunner {
   private readonly active = new Map<string, ActiveChild>();
 
   async createChat(agentBin: string, workspace: string, cursorApiKey?: string): Promise<string> {
-    const env = { ...process.env };
-    if (cursorApiKey) env.CURSOR_API_KEY = cursorApiKey;
+    const env = childEnv(cursorApiKey);
     // agent create-chat often prints the UUID then hangs; kill early and accept UUID on non-zero exit.
     const { stdout, stderr, code } = await runCapture(
       agentBin,
       ["create-chat", "--workspace", workspace, "--trust", "--force"],
       env,
       25,
-      { earlyResolveWhen: (out) => Boolean(parseChatId(out)) },
+      { cwd: workspace, earlyResolveWhen: (out) => Boolean(parseChatId(out)) },
     );
     const chatId = parseChatId(stdout);
     if (chatId) {
@@ -106,8 +113,7 @@ export class CursorAgentRunner implements AgentRunner {
 
   async runPrompt(opts: RunPromptOptions): Promise<RunPromptResult> {
     const key = opts.chatId ?? "new";
-    const env = { ...process.env };
-    if (opts.cursorApiKey) env.CURSOR_API_KEY = opts.cursorApiKey;
+    const env = childEnv(opts.cursorApiKey);
 
     let chatId = opts.chatId;
     if (!chatId) {
@@ -128,7 +134,11 @@ export class CursorAgentRunner implements AgentRunner {
     ];
 
     return new Promise((resolve) => {
-      const child = spawn(opts.agentBin, args, { env, stdio: ["ignore", "pipe", "pipe"] });
+      const child = spawn(opts.agentBin, args, {
+        env,
+        cwd: opts.workspace,
+        stdio: ["ignore", "pipe", "pipe"],
+      });
       this.active.set(key, child);
       // Also index by chat id for stop
       this.active.set(chatId!, child);
