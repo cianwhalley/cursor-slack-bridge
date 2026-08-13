@@ -15,7 +15,7 @@ One VPS. One bridge install. Two Slack apps. Two hubs.
 | Siblings | Client / company repos in that hub’s `repos.json` | School / home repos in *that* hub’s `repos.json` |
 | Channel policy | Often `any` + a tight allowlist | Often `configured` + a couple of channels |
 
-My Machines can be one worker (`repo=` selects the hub by git remote) or two workers. Slack does not share session DBs.
+My Machines can be one worker (`repo=` selects the hub by git remote; extra `--worker-dir` roots do not get their own picker rows) or two workers. Slack does not share session DBs.
 
 ## Isolation we actually use
 
