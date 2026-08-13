@@ -24,6 +24,8 @@ A systemd unit for this lives in [agent-hub-template](https://github.com/cianwha
 
 The git remote of `--worker-dir` is how Cursor matches `repo=`. Start the worker in the hub (or in a sibling) whose `origin` is the repo you name.
 
+`--worker-dir` is **repeatable** (up to 20). The **first** path is assignment identity: the IDE / dashboard picker lists the worker under that repo’s name. Extra roots register routing; they do **not** add extra My Machines rows. From a secondary hub window, pick the same `--name`. Confirm all roots in verbose worker logs (`workspacePaths` / `x-repository-urls`).
+
 ## Why not rely on native Slack + `worker=`
 
 You can trigger My Machines from `@Cursor worker=my-vps …`. That still:

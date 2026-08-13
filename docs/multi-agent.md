@@ -27,4 +27,4 @@ The agent child environment **deletes** `SLACK_BOT_TOKEN` and `SLACK_APP_TOKEN` 
 
 Persona, skills, and sibling repos live **in the hub**, not in this process. If two instances point `WORKSPACE` at the same path, they are two Slack faces of the same brain. Point them at different hubs for ops vs family (see [workspaces.md](workspaces.md)).
 
-My Machines can use one worker name and select the hub with `repo=` (the worker directory’s git remote). Or run two workers. The Slack side does not know or care.
+My Machines can use one worker name and select the hub with `repo=` (each `--worker-dir` git remote). Repeat `--worker-dir`; the picker still shows only the first root. Or run two workers. The Slack side does not know or care.
