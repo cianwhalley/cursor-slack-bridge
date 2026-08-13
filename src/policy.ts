@@ -165,9 +165,35 @@ export function shouldEngage(
   };
 }
 
-export function isBridgeCommand(text: string): "ping" | "stop" | null {
+export function isBridgeCommand(text: string): "ping" | "stop" | "help" | null {
   const t = text.trim().toLowerCase();
   if (t === "ping") return "ping";
   if (t === "stop" || t === "exit") return "stop";
+  if (t === "help" || t === "?") return "help";
   return null;
+}
+
+/** Slack mrkdwn — no Markdown headings. */
+export function bridgeHelpText(opts: {
+  workspace: string;
+  dmPolicy: string;
+  channelPolicy: string;
+}): string {
+  return [
+    "*Cursor Slack bridge*",
+    "This bot is the Slack face of a Cursor agent on a local workspace — not a Cloud Agent.",
+    "",
+    `Workspace: \`${opts.workspace}\``,
+    `DM policy: \`${opts.dmPolicy}\` · Channel policy: \`${opts.channelPolicy}\``,
+    "",
+    "*Commands* (no Cursor run):",
+    "• `ping` — liveness + workspace path",
+    "• `stop` / `exit` — kill the active agent run in this DM/thread",
+    "• `help` — this message",
+    "",
+    "*How to talk*",
+    "• DM: send a message (if you are allowlisted)",
+    "• Channel: `@mention` to start a thread; replies continue without mention",
+    "• While a run is in progress, follow-ups queue — send `stop` to cancel",
+  ].join("\n");
 }

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { BridgeConfig } from "../src/config.js";
 import { _testing } from "../src/config.js";
 import {
+  bridgeHelpText,
   isBridgeCommand,
   shouldEngage,
   stripBotMention,
@@ -56,9 +57,9 @@ describe("config ID parsing", () => {
   });
 
   it("accepts canonical IDs", () => {
-    const s = _testing.parseIdList("U07F1909LCQ,C07F195GB96", "ALLOWED_USER_IDS");
-    expect(s.has("U07F1909LCQ")).toBe(true);
-    expect(s.has("C07F195GB96")).toBe(true);
+    const s = _testing.parseIdList("U0123456789,C0123456789", "ALLOWED_USER_IDS");
+    expect(s.has("U0123456789")).toBe(true);
+    expect(s.has("C0123456789")).toBe(true);
   });
 });
 
@@ -228,6 +229,20 @@ describe("helpers", () => {
   it("isBridgeCommand", () => {
     expect(isBridgeCommand("ping")).toBe("ping");
     expect(isBridgeCommand("stop")).toBe("stop");
+    expect(isBridgeCommand("help")).toBe("help");
+    expect(isBridgeCommand("?")).toBe("help");
     expect(isBridgeCommand("hello")).toBeNull();
+  });
+
+  it("bridgeHelpText names the workspace and commands", () => {
+    const text = bridgeHelpText({
+      workspace: "/ws",
+      dmPolicy: "allowlist",
+      channelPolicy: "any",
+    });
+    expect(text).toContain("`/ws`");
+    expect(text).toContain("`ping`");
+    expect(text).toContain("`stop`");
+    expect(text).toContain("`help`");
   });
 });

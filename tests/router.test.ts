@@ -128,7 +128,7 @@ describe("MessageRouter", () => {
     await router.process({
       channel: "C_SYSOPS",
       user: "U1",
-      text: `<@${bot}> help`,
+      text: `<@${bot}> fix oauth`,
       ts: "50.0",
     });
 
@@ -153,6 +153,28 @@ describe("MessageRouter", () => {
       ts: "1",
     });
     expect(runner.runPrompt).not.toHaveBeenCalled();
+    sessions.close();
+  });
+
+  it("help never spawn agent", async () => {
+    const slack = mockSlack();
+    const runner: AgentRunner = {
+      createChat: vi.fn(),
+      runPrompt: vi.fn(),
+      stop: vi.fn(() => false),
+    };
+    const c = cfg();
+    const sessions = new SessionStore(c.sessionDb);
+    const router = new MessageRouter({ config: c, sessions, runner, slack: slack.client });
+    await router.process({
+      channel: "D1",
+      user: "U1",
+      text: "help",
+      ts: "1",
+    });
+    expect(runner.runPrompt).not.toHaveBeenCalled();
+    expect(slack.posts[0]?.text).toMatch(/Cursor Slack bridge/i);
+    expect(slack.posts[0]?.text).toContain("`/ws`");
     sessions.close();
   });
 
