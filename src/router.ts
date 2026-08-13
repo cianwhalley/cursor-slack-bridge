@@ -2,6 +2,7 @@ import type { BridgeConfig } from "./config.js";
 import type { AgentRunner } from "./agent-runner.js";
 import { buildPrompt, chunkText } from "./format.js";
 import {
+  bridgeHelpText,
   isBridgeCommand,
   shouldEngage,
   slackPromptPrefix,
@@ -67,6 +68,19 @@ export class MessageRouter {
       await slack.poster.post(
         decision.channelId,
         `Pong! Bridge alive.\nWorkspace: \`${cfg.workspace}\``,
+        replyThreadTs,
+      );
+      return;
+    }
+
+    if (cmd === "help") {
+      await slack.poster.post(
+        decision.channelId,
+        bridgeHelpText({
+          workspace: cfg.workspace,
+          dmPolicy: cfg.dmPolicy,
+          channelPolicy: cfg.channelPolicy,
+        }),
         replyThreadTs,
       );
       return;

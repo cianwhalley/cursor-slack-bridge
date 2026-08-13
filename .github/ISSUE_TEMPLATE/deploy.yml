@@ -1,0 +1,22 @@
+name: Deploy
+description: Install or production ops question
+labels: ["deploy"]
+body:
+  - type: textarea
+    id: setup
+    attributes:
+      label: Setup
+      description: OS, systemd user vs root, Slack Socket Mode on/off, WORKSPACE path.
+    validations:
+      required: true
+  - type: textarea
+    id: question
+    attributes:
+      label: What is stuck
+    validations:
+      required: true
+  - type: textarea
+    id: tried
+    attributes:
+      label: What you already tried
+      description: ping, journalctl, auth.test, etc. Redact tokens.
