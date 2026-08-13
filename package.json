@@ -7,12 +7,12 @@
   "description": "Bolt Socket Mode bridge: Slack ↔ headless Cursor agent CLI on your machine",
   "repository": {
     "type": "git",
-    "url": "https://github.com/zenmindhacker/cursor-slack-bridge.git"
+    "url": "https://github.com/cianwhalley/cursor-slack-bridge.git"
   },
   "bugs": {
-    "url": "https://github.com/zenmindhacker/cursor-slack-bridge/issues"
+    "url": "https://github.com/cianwhalley/cursor-slack-bridge/issues"
   },
-  "homepage": "https://github.com/zenmindhacker/cursor-slack-bridge#readme",
+  "homepage": "https://github.com/cianwhalley/cursor-slack-bridge#readme",
   "keywords": ["slack", "cursor", "agent", "bolt", "socket-mode"],
   "engines": {
     "node": ">=22"

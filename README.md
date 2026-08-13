@@ -1,6 +1,6 @@
 # cursor-slack-bridge
 
-[![CI](https://github.com/zenmindhacker/cursor-slack-bridge/actions/workflows/ci.yml/badge.svg)](https://github.com/zenmindhacker/cursor-slack-bridge/actions/workflows/ci.yml)
+[![CI](https://github.com/cianwhalley/cursor-slack-bridge/actions/workflows/ci.yml/badge.svg)](https://github.com/cianwhalley/cursor-slack-bridge/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Node 22+](https://img.shields.io/badge/node-22%2B-brightgreen.svg)](package.json)
 
@@ -49,7 +49,7 @@ flowchart LR
   Hub --> Siblings
 ```
 
-The hub itself is a separate repo: **[agent-hub-template](https://github.com/zenmindhacker/agent-hub-template)** (`SOUL.md`, skills, sibling registry, optional tick). Clone it (or bring your own), point `WORKSPACE` at it.
+The hub itself is a separate repo: **[agent-hub-template](https://github.com/cianwhalley/agent-hub-template)** (`SOUL.md`, skills, sibling registry, optional tick). Clone it (or bring your own), point `WORKSPACE` at it.
 
 ## Quick start (dev)
 

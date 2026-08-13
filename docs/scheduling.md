@@ -27,4 +27,4 @@ Socket Mode does not echo your outbound messages. Without this, humans must `@me
 - Idle ticks cost nothing (no model).
 - The same `@YourBot` that you DM is the one that pings you at 09:00 — then you can talk in-thread.
 
-See [agent-hub-template](https://github.com/zenmindhacker/agent-hub-template) `schedules/` and `ops/tick/`.
+See [agent-hub-template](https://github.com/cianwhalley/agent-hub-template) `schedules/` and `ops/tick/`.

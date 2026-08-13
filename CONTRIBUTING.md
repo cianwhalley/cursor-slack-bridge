@@ -27,7 +27,7 @@ pnpm typecheck
 ## What belongs here vs the hub
 
 - **This repo:** Bolt, policy, sessions, Slack UX, systemd install.
-- **[agent-hub-template](https://github.com/zenmindhacker/agent-hub-template):** `SOUL.md`, skills, sibling repos, scheduling.
+- **[agent-hub-template](https://github.com/cianwhalley/agent-hub-template):** `SOUL.md`, skills, sibling repos, scheduling.
 
 ## Code of conduct
 

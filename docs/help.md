@@ -44,4 +44,4 @@ Upgrade: agent child env strips `SLACK_*`. Confirm you are on a build that inclu
 
 ## Still stuck
 
-Open a [deploy issue](https://github.com/zenmindhacker/cursor-slack-bridge/issues/new?template=deploy.yml). Redact tokens.
+Open a [deploy issue](https://github.com/cianwhalley/cursor-slack-bridge/issues/new?template=deploy.yml). Redact tokens.
