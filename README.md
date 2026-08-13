@@ -96,7 +96,7 @@ Each agent needs its own Slack app (one Socket Mode consumer per app-level token
 | [Why](docs/why.md) | Same-brain thesis vs native Slack vs OpenClaw |
 | [Install](docs/install.md) | Slack app, service user, systemd |
 | [Architecture](docs/architecture.md) | Events → policy → CLI → reply |
-| [My Machines](docs/my-machines.md) | Cursor UI / iOS on the same VPS |
+| [My Machines](docs/my-machines.md) | Cursor UI / iOS on the same VPS. Repeat `--worker-dir`; picker still shows the first repo only. |
 | [Workspaces](docs/workspaces.md) | Per-agent hub + sibling repos |
 | [Slack UX](docs/slack-ux.md) | Features and why they exist |
 | [Multi-agent](docs/multi-agent.md) | N instances, isolation |
