@@ -12,6 +12,8 @@ export interface RunPromptOptions {
   chatId: string | undefined;
   prompt: string;
   cursorApiKey?: string;
+  /** When set, passed as `agent --model <id>`. */
+  model?: string;
   timeoutSeconds: number;
   onStdoutLine?: (line: string) => void;
 }
@@ -25,7 +27,12 @@ export interface RunPromptResult {
 }
 
 export interface AgentRunner {
-  createChat(agentBin: string, workspace: string, cursorApiKey?: string): Promise<string>;
+  createChat(
+    agentBin: string,
+    workspace: string,
+    cursorApiKey?: string,
+    model?: string,
+  ): Promise<string>;
   runPrompt(opts: RunPromptOptions): Promise<RunPromptResult>;
   stop(key: string): boolean;
 }
@@ -94,12 +101,19 @@ function parseChatId(stdout: string): string | undefined {
 export class CursorAgentRunner implements AgentRunner {
   private readonly active = new Map<string, ActiveChild>();
 
-  async createChat(agentBin: string, workspace: string, cursorApiKey?: string): Promise<string> {
+  async createChat(
+    agentBin: string,
+    workspace: string,
+    cursorApiKey?: string,
+    model?: string,
+  ): Promise<string> {
     const env = childEnv(cursorApiKey);
+    const args = ["create-chat", "--workspace", workspace, "--trust", "--force"];
+    if (model) args.push("--model", model);
     // agent create-chat often prints the UUID then hangs; kill early and accept UUID on non-zero exit.
     const { stdout, stderr, code } = await runCapture(
       agentBin,
-      ["create-chat", "--workspace", workspace, "--trust", "--force"],
+      args,
       env,
       25,
       { cwd: workspace, earlyResolveWhen: (out) => Boolean(parseChatId(out)) },
@@ -117,7 +131,12 @@ export class CursorAgentRunner implements AgentRunner {
 
     let chatId = opts.chatId;
     if (!chatId) {
-      chatId = await this.createChat(opts.agentBin, opts.workspace, opts.cursorApiKey);
+      chatId = await this.createChat(
+        opts.agentBin,
+        opts.workspace,
+        opts.cursorApiKey,
+        opts.model,
+      );
     }
 
     const args = [
@@ -130,8 +149,11 @@ export class CursorAgentRunner implements AgentRunner {
       opts.workspace,
       "--trust",
       "--force",
-      opts.prompt,
     ];
+    if (opts.model) {
+      args.push("--model", opts.model);
+    }
+    args.push(opts.prompt);
 
     return new Promise((resolve) => {
       const child = spawn(opts.agentBin, args, {

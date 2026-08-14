@@ -204,7 +204,12 @@ export class MessageRouter {
       let chatId = sessions.get(channelId, threadKey)?.cursorChatId;
 
       if (!chatId) {
-        chatId = await runner.createChat(config.agentBin, config.workspace, config.cursorApiKey);
+        chatId = await runner.createChat(
+          config.agentBin,
+          config.workspace,
+          config.cursorApiKey,
+          config.agentModel,
+        );
         sessions.upsert(channelId, threadKey, chatId, decision.label);
       } else {
         sessions.touch(channelId, threadKey);
@@ -224,6 +229,7 @@ export class MessageRouter {
         chatId,
         prompt,
         cursorApiKey: config.cursorApiKey,
+        model: config.agentModel,
         timeoutSeconds: config.sessionTimeoutSeconds,
         onStdoutLine: (line) => {
           const ev = progressFromStreamLine(line, {

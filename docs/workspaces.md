@@ -15,11 +15,22 @@ Starter layout: [agent-hub-template](https://github.com/cianwhalley/agent-hub-te
 ## Instance = Slack app + env + hub path
 
 ```
-~/.config/cursor-slack/ops.env      WORKSPACE=…/workspaces/ops-agent
-~/.config/cursor-slack/family.env   WORKSPACE=…/workspaces/family-agent
+~/.config/cursor-slack/ops.env      WORKSPACE=…/slack-workspace/ops-agent
+~/.config/cursor-slack/family.env   WORKSPACE=…/slack-workspace/family-agent
+# Optional: AGENT_MODEL=cursor-grok-4.5-high-fast
 ```
 
 Not in-process routing. Two bots, two hubs, two `repos.json` files. An ops agent never sees the family checkouts unless you put them in its registry.
+
+## Layout on the VPS (typical)
+
+| Path | Role |
+|------|------|
+| `~/slack-workspace/<hub>` | Slack + tick hub checkout |
+| `~/cursor-workspace/<hub>` | My Machines / Cloud hub checkout |
+| `~/work/<lane>/…` | Sibling product repos (shared by both faces) |
+
+Same remotes. Different trees for Slack vs Cloud so deploy targets stay obvious.
 
 ## Hygiene contract
 
@@ -27,7 +38,7 @@ These rules live in the hub (Cursor always-apply + skills), so **Slack-spawned a
 
 1. Start of turn: `scripts/repo-monitor.sh` (ff-pull / clone missing when safe).
 2. Before focusing a sibling: sync that name.
-3. After *your* edits: `ship-work` (feature branch → PR). Do not leave dirt.
+3. After *your* edits: `ship-work` (commit + push on `main` unless asked for a branch). Do not leave dirt.
 4. Never force-reset a dirty or diverged tree you did not create.
 5. Optional Graphify index; always gitignore `graphify-out/`.
 

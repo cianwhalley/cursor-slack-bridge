@@ -41,4 +41,4 @@ OpenClaw is a full assistant framework with many channels. This project assumes 
 
 ## Same workspace
 
-See [workspaces.md](workspaces.md) and [my-machines.md](my-machines.md). The short version: `WORKSPACE` (bridge) and `agent worker --worker-dir` (My Machines) must be the same git checkout. Then Slack and Cursor cannot drift.
+See [workspaces.md](workspaces.md) and [my-machines.md](my-machines.md). Slack and Cloud usually use **separate** hub checkouts of the same remotes (`~/slack-workspace/…` vs `~/cursor-workspace/…`) so agents do not confuse deploy targets. Sibling product repos stay under `~/work/…` and are shared.

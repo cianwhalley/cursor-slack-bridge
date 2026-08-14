@@ -12,6 +12,8 @@ export interface BridgeConfig {
   cursorApiKey: string | undefined;
   agentBin: string;
   workspace: string;
+  /** Optional Cursor model id (e.g. cursor-grok-4.5-high-fast). Passed as agent --model. */
+  agentModel: string | undefined;
   sessionDb: string;
   dmPolicy: DmPolicy;
   allowedUserIds: Set<string>;
@@ -108,6 +110,7 @@ export function loadConfig(envPath?: string): BridgeConfig {
     cursorApiKey: process.env.CURSOR_API_KEY?.trim() || undefined,
     agentBin: process.env.AGENT_BIN?.trim() || "agent",
     workspace: resolve(requireEnv("WORKSPACE")),
+    agentModel: process.env.AGENT_MODEL?.trim() || undefined,
     sessionDb: resolve(process.env.SESSION_DB?.trim() || "./cursor-slack.db"),
     dmPolicy,
     allowedUserIds,

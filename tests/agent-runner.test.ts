@@ -99,6 +99,8 @@ describe("CursorAgentRunner", () => {
       expect(a).toContain("--trust");
       expect(a).toContain("--force");
       expect(a).toContain("--print");
+      expect(a).toContain("--model");
+      expect(a).toContain("cursor-grok-4.5-high-fast");
       expect(spawnOpts).toMatchObject({ cwd: "/ws" });
       expect(spawnOpts?.env).not.toHaveProperty("SLACK_BOT_TOKEN");
       expect(spawnOpts?.env).not.toHaveProperty("SLACK_APP_TOKEN");
@@ -116,6 +118,7 @@ describe("CursorAgentRunner", () => {
       chatId: "chat-existing",
       prompt: "hello",
       cursorApiKey: "k-test",
+      model: "cursor-grok-4.5-high-fast",
       timeoutSeconds: 30,
     });
     expect(result.status).toBe("ok");
