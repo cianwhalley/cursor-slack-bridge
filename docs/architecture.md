@@ -48,7 +48,9 @@ sequenceDiagram
 
 ## Concurrency
 
-Same `(channelId:threadKey)` is serialized. A second message while a run is active gets ⏳ plus “Still working… send `stop`.” `stop` SIGTERMs the child.
+Same `(channelId:threadKey)` is serialized. A second **distinct** message while a run is active gets ⏳ plus “Still working… send `stop`.” `stop` SIGTERMs the child.
+
+Slack often delivers one `@mention` as both `message` and `app_mention`. The router dedupes by `channel:messageTs` (~120s) so that does not look like a phantom queued follow-up.
 
 ## Multi-instance
 

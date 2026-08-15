@@ -39,6 +39,9 @@ export class MessageRouter {
   private readonly queues = new Map<string, QueueItem[]>();
   private readonly running = new Set<string>();
   private readonly activeRunKeys = new Map<string, string>(); // sessionKey -> runner stop key
+  /** Slack often delivers the same @mention as both `message` and `app_mention`. */
+  private readonly seenMessageTs = new Map<string, number>();
+  private static readonly DEDUPE_TTL_MS = 120_000;
 
   constructor(private readonly deps: RouterDeps) {}
 
@@ -58,6 +61,17 @@ export class MessageRouter {
     if (!decision.engage) {
       return;
     }
+
+    // Drop duplicate deliveries of the same Slack message (message + app_mention, retries).
+    const dedupeKey = `${decision.channelId}:${decision.messageTs}`;
+    const now = Date.now();
+    for (const [k, at] of this.seenMessageTs) {
+      if (now - at > MessageRouter.DEDUPE_TTL_MS) this.seenMessageTs.delete(k);
+    }
+    if (this.seenMessageTs.has(dedupeKey)) {
+      return;
+    }
+    this.seenMessageTs.set(dedupeKey, now);
 
     const cmd = isBridgeCommand(decision.text);
     const replyThreadTs = decision.isDm

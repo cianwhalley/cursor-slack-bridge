@@ -206,6 +206,36 @@ describe("MessageRouter", () => {
     sessions.close();
   });
 
+  it("dedupes message + app_mention for the same ts", async () => {
+    const slack = mockSlack();
+    const runner: AgentRunner = {
+      createChat: vi.fn(async () => "c"),
+      runPrompt: vi.fn(async () => ({
+        status: "ok" as const,
+        chatId: "c",
+        text: "once",
+        exitCode: 0,
+        stderr: "",
+      })),
+      stop: vi.fn(() => false),
+    };
+    const c = cfg();
+    const sessions = new SessionStore(c.sessionDb);
+    const router = new MessageRouter({ config: c, sessions, runner, slack: slack.client });
+    const ev = {
+      channel: "C_SYSOPS",
+      user: "U1",
+      text: `<@${bot}> explain`,
+      ts: "99.1",
+    };
+    await Promise.all([router.process(ev), router.process(ev)]);
+    expect(runner.runPrompt).toHaveBeenCalledTimes(1);
+    expect(
+      slack.posts.some((p) => p.text.includes("Still working on your last message")),
+    ).toBe(false);
+    sessions.close();
+  });
+
   it("queues concurrent messages for same thread", async () => {
     const slack = mockSlack();
     let concurrent = 0;

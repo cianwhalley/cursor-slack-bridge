@@ -8,7 +8,7 @@ The chat surface is meant to feel like a serious operator bot, not a stack of �
 |----------|-----|
 | ⏳ on your message, then ✅ / ❌ | Non-verbal ack. Silence used to mean “maybe dead.” |
 | One editable `Working…` draft + rolling tool lines | Never a pile of keepalive bubbles. |
-| Follow-up while busy: “Still working… send `stop`” | Queued DMs used to sit with no ack. |
+| Follow-up while busy: “Still working… send `stop`” | Queued DMs used to sit with no ack. Same-ts `message`+`app_mention` is deduped (not a fake queue). |
 | `stop` / `exit` kills the child | Escape hatch; no LLM. |
 | `ping` / `help` | Liveness and rules; no Cursor. |
 | Channel replies stay in the thread | Keep the channel tidy. DMs stay top-level unless you are already in a thread UI. |

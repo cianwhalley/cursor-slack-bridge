@@ -91,6 +91,8 @@ async function main(): Promise<void> {
     router.handleEvent(ev);
   });
 
+  // Also subscribe to app_mention — Slack often emits BOTH for a channel @mention.
+  // MessageRouter dedupes by channel:ts so we do not double-queue / fake "Still working…".
   app.event("app_mention", async ({ event }) => {
     router.handleEvent(event as SlackEventLikeCompat);
   });
