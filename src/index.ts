@@ -210,6 +210,71 @@ async function main(): Promise<void> {
     return { text, blocks: out };
   }
 
+  // Serialize approve CLIs so a later trash finish cannot republish an older list
+  // over a newer optimistic UI. Trash skips Slack in the CLI; we refresh once idle.
+  let parentEmailChain: Promise<void> = Promise.resolve();
+  let parentEmailInFlight = 0;
+  let parentEmailLastChannel = "";
+  let parentEmailLastTs = "";
+
+  function runApproveCli(cliArgs: string[]): Promise<number> {
+    const hub = config.workspace;
+    const script = resolve(hub, "skills/orders-mvp-sync/scripts/run-parent-email-approve.sh");
+    return new Promise((resolve) => {
+      console.log(`[parent-email] spawn ${[script, ...cliArgs].join(" ")}`);
+      const child = spawn("bash", [script, ...cliArgs], {
+        cwd: hub,
+        stdio: ["ignore", "pipe", "pipe"],
+        env: process.env,
+      });
+      let out = "";
+      child.stdout?.on("data", (chunk: Buffer) => {
+        out += chunk.toString();
+      });
+      child.stderr?.on("data", (chunk: Buffer) => {
+        out += chunk.toString();
+      });
+      child.on("exit", (code) => {
+        const snip = out.trim().slice(-800);
+        console.log(`[parent-email] exit=${code ?? 1}${snip ? ` :: ${snip}` : ""}`);
+        resolve(code ?? 1);
+      });
+      child.on("error", (err) => {
+        console.warn(`[parent-email] spawn error: ${String(err)}`);
+        resolve(1);
+      });
+    });
+  }
+
+  function enqueueParentEmail(cliArgs: string[], channel: string, messageTs: string): void {
+    if (channel) parentEmailLastChannel = channel;
+    if (messageTs) parentEmailLastTs = messageTs;
+    parentEmailInFlight += 1;
+    parentEmailChain = parentEmailChain
+      .then(async () => {
+        await runApproveCli(cliArgs);
+      })
+      .catch((err) => {
+        console.warn(`[parent-email] chain error: ${String(err)}`);
+      })
+      .then(async () => {
+        parentEmailInFlight -= 1;
+        if (parentEmailInFlight !== 0) return;
+        const ch = parentEmailLastChannel;
+        const ts = parentEmailLastTs;
+        if (!ch || !ts) return;
+        // One authoritative Slack sync after a burst of trash/send clicks.
+        await runApproveCli([
+          "--action",
+          "refresh",
+          "--channel",
+          ch,
+          "--message-ts",
+          ts,
+        ]);
+      });
+  }
+
   app.action(/.*/, async ({ ack, body, action, client }) => {
     await ack();
     const actionId =
@@ -276,33 +341,13 @@ async function main(): Promise<void> {
       }
     }
 
-    const hub = config.workspace;
-    const script = resolve(hub, "skills/orders-mvp-sync/scripts/run-parent-email-approve.sh");
-    const args = [script, "--action", actionId === "parent_email_trash" ? "trash" : "send_all"];
-    if (actionId === "parent_email_trash" && value) {
-      args.push("--id", value);
-    }
-    if (channel) args.push("--channel", channel);
-    if (messageTs) args.push("--message-ts", messageTs);
-    console.log(`[parent-email] spawn ${args.join(" ")}`);
-    const child = spawn("bash", args, {
-      cwd: hub,
-      detached: true,
-      stdio: ["ignore", "pipe", "pipe"],
-      env: process.env,
-    });
-    let out = "";
-    child.stdout?.on("data", (chunk: Buffer) => {
-      out += chunk.toString();
-    });
-    child.stderr?.on("data", (chunk: Buffer) => {
-      out += chunk.toString();
-    });
-    child.on("exit", (code) => {
-      const snip = out.trim().slice(-800);
-      console.log(`[parent-email] exit=${code}${snip ? ` :: ${snip}` : ""}`);
-    });
-    child.unref();
+    const cliArgs =
+      actionId === "parent_email_trash"
+        ? ["--action", "trash", "--id", value, "--skip-slack"]
+        : ["--action", "send_all"];
+    if (channel) cliArgs.push("--channel", channel);
+    if (messageTs) cliArgs.push("--message-ts", messageTs);
+    enqueueParentEmail(cliArgs, channel, messageTs);
   });
 
   const shutdown = async () => {
