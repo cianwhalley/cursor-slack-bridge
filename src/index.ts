@@ -100,8 +100,11 @@ async function main(): Promise<void> {
   });
 
   // Parent-email approve buttons (orders-mvp) — ack fast, spawn CLI (no agent wake).
+  // Slack has no disabled-button attribute; replace the message immediately so
+  // users do not double-click during the ~10s vault/Gmail work.
+  // https://docs.slack.dev/reference/block-kit/block-elements/button-element
   const parentEmailActions = new Set(["parent_email_trash", "parent_email_send_all"]);
-  app.action(/.*/, async ({ ack, body, action }) => {
+  app.action(/.*/, async ({ ack, body, action, client }) => {
     await ack();
     const actionId =
       action && typeof action === "object" && "action_id" in action
@@ -130,6 +133,29 @@ async function main(): Promise<void> {
       body && typeof body === "object" && "message" in body
         ? String((body as { message?: { ts?: string } }).message?.ts || "")
         : "";
+
+    const workingLabel =
+      actionId === "parent_email_trash"
+        ? ":hourglass_flowing_sand: *Trashing…* Updating the list — hang tight."
+        : ":hourglass_flowing_sand: *Sending…* Gmail drafts + SMS — hang tight (do not click again).";
+    if (channel && messageTs) {
+      try {
+        await client.chat.update({
+          channel,
+          ts: messageTs,
+          text: workingLabel.replace(/:[a-z_]+:\s*/g, "").replace(/\*/g, ""),
+          blocks: [
+            {
+              type: "section",
+              text: { type: "mrkdwn", text: workingLabel },
+            },
+          ],
+        });
+      } catch (err) {
+        console.warn(`[parent-email] working-state update failed: ${String(err)}`);
+      }
+    }
+
     const hub = config.workspace;
     const script = resolve(hub, "skills/orders-mvp-sync/scripts/run-parent-email-approve.sh");
     const args = [script, "--action", actionId === "parent_email_trash" ? "trash" : "send_all"];
