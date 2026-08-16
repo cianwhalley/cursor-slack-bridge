@@ -210,12 +210,40 @@ async function main(): Promise<void> {
     return { text, blocks: out };
   }
 
-  // Serialize approve CLIs so a later trash finish cannot republish an older list
-  // over a newer optimistic UI. Trash skips Slack in the CLI; we refresh once idle.
+  // Serialize approve CLIs. Trash skips Slack in the CLI; after a trash-only burst we
+  // refresh once from Drive. Send All owns Slack (Working… → final) — never let a
+  // stale trash refresh republish buttons over Working….
   let parentEmailChain: Promise<void> = Promise.resolve();
   let parentEmailInFlight = 0;
   let parentEmailLastChannel = "";
   let parentEmailLastTs = "";
+  let parentEmailLastAction: "trash" | "send_all" = "trash";
+  let parentEmailEpoch = 0;
+  let parentEmailSlack: WebClient | null = null;
+
+  const WORKING_BLOCKS = [
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: ":hourglass_flowing_sand: *Sending…* Gmail drafts + SMS — hang tight (do not click again).",
+      },
+    },
+  ];
+
+  async function applySendingState(channel: string, messageTs: string): Promise<void> {
+    if (!parentEmailSlack || !channel || !messageTs) return;
+    try {
+      await parentEmailSlack.chat.update({
+        channel,
+        ts: messageTs,
+        text: "Sending… hang tight (do not click again).",
+        blocks: WORKING_BLOCKS as never,
+      });
+    } catch (err) {
+      console.warn(`[parent-email] Working… update failed: ${String(err)}`);
+    }
+  }
 
   function runApproveCli(cliArgs: string[]): Promise<number> {
     const hub = config.workspace;
@@ -246,10 +274,17 @@ async function main(): Promise<void> {
     });
   }
 
-  function enqueueParentEmail(cliArgs: string[], channel: string, messageTs: string): void {
+  function enqueueParentEmail(
+    cliArgs: string[],
+    channel: string,
+    messageTs: string,
+    kind: "trash" | "send_all",
+  ): void {
     if (channel) parentEmailLastChannel = channel;
     if (messageTs) parentEmailLastTs = messageTs;
+    parentEmailLastAction = kind;
     parentEmailInFlight += 1;
+    const epochAtEnqueue = parentEmailEpoch;
     parentEmailChain = parentEmailChain
       .then(async () => {
         await runApproveCli(cliArgs);
@@ -260,10 +295,12 @@ async function main(): Promise<void> {
       .then(async () => {
         parentEmailInFlight -= 1;
         if (parentEmailInFlight !== 0) return;
+        // Send All CLI already published the final Slack state — do not refresh.
+        if (parentEmailLastAction === "send_all") return;
         const ch = parentEmailLastChannel;
         const ts = parentEmailLastTs;
         if (!ch || !ts) return;
-        // One authoritative Slack sync after a burst of trash/send clicks.
+        const epochBeforeRefresh = parentEmailEpoch;
         await runApproveCli([
           "--action",
           "refresh",
@@ -272,6 +309,16 @@ async function main(): Promise<void> {
           "--message-ts",
           ts,
         ]);
+        // If Send All (or another optimistic edit) happened during refresh, restore Working….
+        if (
+          parentEmailEpoch !== epochBeforeRefresh ||
+          parentEmailLastAction === "send_all" ||
+          parentEmailEpoch !== epochAtEnqueue
+        ) {
+          if (parentEmailLastAction === "send_all") {
+            await applySendingState(parentEmailLastChannel, parentEmailLastTs);
+          }
+        }
       });
   }
 
@@ -309,6 +356,9 @@ async function main(): Promise<void> {
         ? (body as { message?: { blocks?: unknown } }).message?.blocks
         : undefined;
 
+    parentEmailSlack = client;
+    parentEmailEpoch += 1;
+
     if (channel && messageTs) {
       try {
         if (actionId === "parent_email_trash") {
@@ -322,32 +372,21 @@ async function main(): Promise<void> {
             });
           }
         } else {
-          const workingLabel =
-            ":hourglass_flowing_sand: *Sending…* Gmail drafts + SMS — hang tight (do not click again).";
-          await client.chat.update({
-            channel,
-            ts: messageTs,
-            text: "Sending… hang tight (do not click again).",
-            blocks: [
-              {
-                type: "section",
-                text: { type: "mrkdwn", text: workingLabel },
-              },
-            ],
-          });
+          await applySendingState(channel, messageTs);
         }
       } catch (err) {
         console.warn(`[parent-email] optimistic update failed: ${String(err)}`);
       }
     }
 
+    const kind = actionId === "parent_email_trash" ? "trash" : "send_all";
     const cliArgs =
-      actionId === "parent_email_trash"
+      kind === "trash"
         ? ["--action", "trash", "--id", value, "--skip-slack"]
         : ["--action", "send_all"];
     if (channel) cliArgs.push("--channel", channel);
     if (messageTs) cliArgs.push("--message-ts", messageTs);
-    enqueueParentEmail(cliArgs, channel, messageTs);
+    enqueueParentEmail(cliArgs, channel, messageTs, kind);
   });
 
   const shutdown = async () => {
