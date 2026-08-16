@@ -1,0 +1,20 @@
+{
+  "groups": [
+    {
+      "id": "approve_example",
+      "script": "skills/example-approve/scripts/run-approve.sh",
+      "secondaryActionId": "example_discard",
+      "primaryActionId": "example_send_all",
+      "secondaryArgs": ["--action", "discard", "--id", "{{value}}", "--skip-slack"],
+      "primaryArgs": ["--action", "send_all"],
+      "idleRefreshArgs": ["--action", "refresh"],
+      "optimisticSecondary": "drop_row_hide_primary",
+      "optimisticPrimary": "replace_working",
+      "busyHeaderTemplate": "{{mention}} Items awaiting confirm ({{count}})",
+      "busyContext": "_Working…_ — keep discarding if needed. Send All returns when idle.",
+      "emptyBusyText": "{{mention}} Discarding last item… primary stays hidden until idle.",
+      "workingText": ":hourglass_flowing_sand: *Sending…* hang tight (do not click again).",
+      "rowButtonLabel": "Trash"
+    }
+  ]
+}

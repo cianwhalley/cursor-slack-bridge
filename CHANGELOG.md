@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- Config-driven **Block Kit actions** (`BLOCK_ACTIONS_CONFIG` / `BLOCK_ACTIONS_JSON`): secondary/primary button → hub script, optimistic UI, serialized queue, optional localhost test hook. See `docs/block-actions.md`.
+
 ## [0.1.1] - 2026-08-15
 
 ### Fixed

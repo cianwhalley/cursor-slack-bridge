@@ -72,6 +72,7 @@ Production on a VPS: **[docs/install.md](docs/install.md)**. Slack app from [`ma
 - One editable draft (`Working…` + tool lines); the final reply replaces it
 - Follow-up while a run is in progress: immediate “still working… send `stop` to cancel”
 - `ping` / `stop` / `help` — no Cursor run
+- Optional **Block Kit → hub script** actions (approve / bulk-confirm UIs) — [`docs/block-actions.md`](docs/block-actions.md)
 - Tool lines use Cursor `description` / human labels, not raw `cd && export …`
 - Final text = last assistant bubble (not concatenated `result`, not thinking)
 
