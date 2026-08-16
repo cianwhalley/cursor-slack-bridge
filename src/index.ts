@@ -100,8 +100,9 @@ async function main(): Promise<void> {
   });
 
   // Parent-email approve buttons (orders-mvp) — ack fast, spawn CLI (no agent wake).
-  // Slack has no disabled-button attribute. Trash: drop that row immediately and keep
-  // the rest. Send All: replace with Working… until the CLI finishes.
+  // Slack has no disabled-button attribute. UX:
+  //   Trash: drop that row; keep other Trash buttons; hide Send All until discards drain.
+  //   Send All: only after trash idle; replace with Working… until CLI finishes.
   // https://docs.slack.dev/reference/block-kit/block-elements/button-element
   const parentEmailActions = new Set(["parent_email_trash", "parent_email_send_all"]);
 
@@ -127,8 +128,6 @@ async function main(): Promise<void> {
       (b) => isItemTrashRow(b) && String((b.accessory as { value?: string }).value || "") !== trashId,
     );
     const header = blocks.find((b) => b.type === "section" && !b.accessory);
-    const actions = blocks.find((b) => b.type === "actions");
-    const context = blocks.find((b) => b.type === "context");
 
     const mentionMatch =
       typeof (header?.text as { text?: string } | undefined)?.text === "string"
@@ -137,10 +136,21 @@ async function main(): Promise<void> {
     const mention = mentionMatch?.[0] || "<@cian>";
 
     if (remainingItems.length === 0) {
-      const text = `${mention} Parent emails: all clear — none pending.`;
+      const text = `${mention} Discarding last item… Send All stays hidden until discards finish.`;
       return {
         text,
-        blocks: [{ type: "section", text: { type: "mrkdwn", text } }],
+        blocks: [
+          { type: "section", text: { type: "mrkdwn", text } },
+          {
+            type: "context",
+            elements: [
+              {
+                type: "mrkdwn",
+                text: "_Trashing…_ — Send All returns when discards finish (or nothing left).",
+              },
+            ],
+          },
+        ],
       };
     }
 
@@ -162,47 +172,20 @@ async function main(): Promise<void> {
       };
     });
 
+    // Never include Send All while a trash is in flight — reappears after idle refresh.
     const out: Block[] = [
       { type: "section", text: { type: "mrkdwn", text: headerText } },
       ...itemBlocks,
-    ];
-    if (actions) {
-      // Rebuild Send All without stale block_id
-      out.push({
-        type: "actions",
-        elements: [
-          {
-            type: "button",
-            text: { type: "plain_text", text: "Send All" },
-            action_id: "parent_email_send_all",
-            value: "all",
-            style: "primary",
-            confirm: {
-              title: { type: "plain_text", text: "Send all pending?" },
-              text: {
-                type: "mrkdwn",
-                text:
-                  "This sends the remaining Gmail drafts (and held SMS) now. " +
-                  "You’ll see a Working… state until it finishes.",
-              },
-              confirm: { type: "plain_text", text: "Send All" },
-              deny: { type: "plain_text", text: "Cancel" },
-            },
-          },
-        ],
-      });
-    }
-    if (context) {
-      out.push({
+      {
         type: "context",
         elements: [
           {
             type: "mrkdwn",
-            text: "Or reply: `send all` | `discard 2`",
+            text: "_Trashing…_ — keep Trashing rows if needed. Send All returns when discards finish.",
           },
         ],
-      });
-    }
+      },
+    ];
     const text =
       headerText +
       "\n" +
@@ -210,15 +193,14 @@ async function main(): Promise<void> {
     return { text, blocks: out };
   }
 
-  // Serialize approve CLIs. Trash skips Slack in the CLI; after a trash-only burst we
-  // refresh once from Drive. Send All owns Slack (Working… → final) — never let a
-  // stale trash refresh republish buttons over Working….
+  // Serialize approve CLIs. Trash skips Slack in the CLI; after trash drain we refresh
+  // once from Drive (Send All comes back). Send All is rejected while trash pending.
   let parentEmailChain: Promise<void> = Promise.resolve();
   let parentEmailInFlight = 0;
+  let parentEmailTrashPending = 0;
   let parentEmailLastChannel = "";
   let parentEmailLastTs = "";
   let parentEmailLastAction: "trash" | "send_all" = "trash";
-  let parentEmailEpoch = 0;
   let parentEmailSlack: WebClient | null = null;
 
   const WORKING_BLOCKS = [
@@ -284,7 +266,7 @@ async function main(): Promise<void> {
     if (messageTs) parentEmailLastTs = messageTs;
     parentEmailLastAction = kind;
     parentEmailInFlight += 1;
-    const epochAtEnqueue = parentEmailEpoch;
+    if (kind === "trash") parentEmailTrashPending += 1;
     parentEmailChain = parentEmailChain
       .then(async () => {
         await runApproveCli(cliArgs);
@@ -294,13 +276,14 @@ async function main(): Promise<void> {
       })
       .then(async () => {
         parentEmailInFlight -= 1;
+        if (kind === "trash") parentEmailTrashPending = Math.max(0, parentEmailTrashPending - 1);
         if (parentEmailInFlight !== 0) return;
         // Send All CLI already published the final Slack state — do not refresh.
-        if (parentEmailLastAction === "send_all") return;
+        if (kind === "send_all" || parentEmailLastAction === "send_all") return;
         const ch = parentEmailLastChannel;
         const ts = parentEmailLastTs;
         if (!ch || !ts) return;
-        const epochBeforeRefresh = parentEmailEpoch;
+        // Trash drain complete — restore list + Send All from Drive.
         await runApproveCli([
           "--action",
           "refresh",
@@ -309,16 +292,6 @@ async function main(): Promise<void> {
           "--message-ts",
           ts,
         ]);
-        // If Send All (or another optimistic edit) happened during refresh, restore Working….
-        if (
-          parentEmailEpoch !== epochBeforeRefresh ||
-          parentEmailLastAction === "send_all" ||
-          parentEmailEpoch !== epochAtEnqueue
-        ) {
-          if (parentEmailLastAction === "send_all") {
-            await applySendingState(parentEmailLastChannel, parentEmailLastTs);
-          }
-        }
       });
   }
 
@@ -357,11 +330,20 @@ async function main(): Promise<void> {
         : undefined;
 
     parentEmailSlack = client;
-    parentEmailEpoch += 1;
+
+    const kind = actionId === "parent_email_trash" ? "trash" : "send_all";
+
+    // Stale Send All (or confirm held open during trash) — refuse until discards drain.
+    if (kind === "send_all" && parentEmailTrashPending > 0) {
+      console.warn(
+        `[parent-email] ignore send_all while trash_pending=${parentEmailTrashPending}`,
+      );
+      return;
+    }
 
     if (channel && messageTs) {
       try {
-        if (actionId === "parent_email_trash") {
+        if (kind === "trash") {
           const optimistic = optimisticTrashBlocks(messageBlocks, value);
           if (optimistic) {
             await client.chat.update({
@@ -379,7 +361,6 @@ async function main(): Promise<void> {
       }
     }
 
-    const kind = actionId === "parent_email_trash" ? "trash" : "send_all";
     const cliArgs =
       kind === "trash"
         ? ["--action", "trash", "--id", value, "--skip-slack"]
