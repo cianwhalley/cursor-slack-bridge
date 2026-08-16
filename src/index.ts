@@ -1,5 +1,6 @@
 import { App } from "@slack/bolt";
 import { WebClient } from "@slack/web-api";
+import { createServer } from "node:http";
 import { spawn } from "node:child_process";
 import { resolve } from "node:path";
 import { CursorAgentRunner } from "./agent-runner.js";
@@ -295,42 +296,29 @@ async function main(): Promise<void> {
       });
   }
 
-  app.action(/.*/, async ({ ack, body, action, client }) => {
-    await ack();
-    const actionId =
-      action && typeof action === "object" && "action_id" in action
-        ? String((action as { action_id?: string }).action_id || "")
-        : "";
+  async function handleParentEmailAction(opts: {
+    actionId: string;
+    value: string;
+    channel: string;
+    messageTs: string;
+    messageBlocks: unknown;
+    client: WebClient;
+    userId?: string;
+  }): Promise<{ ok: boolean; ignored?: string }> {
+    const { actionId, value, channel, messageTs, messageBlocks, client, userId } = opts;
     if (!parentEmailActions.has(actionId)) {
-      return;
+      return { ok: false, ignored: "unknown_action" };
     }
-    const userId =
-      body && typeof body === "object" && "user" in body
-        ? String((body as { user?: { id?: string } }).user?.id || "")
-        : "";
-    if (config.allowedUserIds.size > 0 && userId && !config.allowedUserIds.has(userId)) {
+    if (
+      config.allowedUserIds.size > 0 &&
+      userId &&
+      !config.allowedUserIds.has(userId)
+    ) {
       console.warn(`[parent-email] ignore action from non-allowlisted user=${userId}`);
-      return;
+      return { ok: false, ignored: "allowlist" };
     }
-    const value =
-      action && typeof action === "object" && "value" in action
-        ? String((action as { value?: string }).value || "")
-        : "";
-    const channel =
-      body && typeof body === "object" && "channel" in body
-        ? String((body as { channel?: { id?: string } }).channel?.id || "")
-        : "";
-    const messageTs =
-      body && typeof body === "object" && "message" in body
-        ? String((body as { message?: { ts?: string } }).message?.ts || "")
-        : "";
-    const messageBlocks =
-      body && typeof body === "object" && "message" in body
-        ? (body as { message?: { blocks?: unknown } }).message?.blocks
-        : undefined;
 
     parentEmailSlack = client;
-
     const kind = actionId === "parent_email_trash" ? "trash" : "send_all";
 
     // Stale Send All (or confirm held open during trash) — refuse until discards drain.
@@ -338,7 +326,7 @@ async function main(): Promise<void> {
       console.warn(
         `[parent-email] ignore send_all while trash_pending=${parentEmailTrashPending}`,
       );
-      return;
+      return { ok: false, ignored: "trash_pending" };
     }
 
     if (channel && messageTs) {
@@ -368,7 +356,93 @@ async function main(): Promise<void> {
     if (channel) cliArgs.push("--channel", channel);
     if (messageTs) cliArgs.push("--message-ts", messageTs);
     enqueueParentEmail(cliArgs, channel, messageTs, kind);
+    return { ok: true };
+  }
+
+  app.action(/.*/, async ({ ack, body, action, client }) => {
+    await ack();
+    const actionId =
+      action && typeof action === "object" && "action_id" in action
+        ? String((action as { action_id?: string }).action_id || "")
+        : "";
+    if (!parentEmailActions.has(actionId)) {
+      return;
+    }
+    const userId =
+      body && typeof body === "object" && "user" in body
+        ? String((body as { user?: { id?: string } }).user?.id || "")
+        : "";
+    const value =
+      action && typeof action === "object" && "value" in action
+        ? String((action as { value?: string }).value || "")
+        : "";
+    const channel =
+      body && typeof body === "object" && "channel" in body
+        ? String((body as { channel?: { id?: string } }).channel?.id || "")
+        : "";
+    const messageTs =
+      body && typeof body === "object" && "message" in body
+        ? String((body as { message?: { ts?: string } }).message?.ts || "")
+        : "";
+    const messageBlocks =
+      body && typeof body === "object" && "message" in body
+        ? (body as { message?: { blocks?: unknown } }).message?.blocks
+        : undefined;
+
+    await handleParentEmailAction({
+      actionId,
+      value,
+      channel,
+      messageTs,
+      messageBlocks,
+      client,
+      userId,
+    });
   });
+
+  // Localhost-only hook so we can exercise the real handler without Slack UI login.
+  if (process.env.PARENT_EMAIL_TEST_HOOK === "1") {
+    const hook = createServer((req, res) => {
+      if (req.method !== "POST" || req.url !== "/parent-email-test") {
+        res.writeHead(404);
+        res.end("not found");
+        return;
+      }
+      const chunks: Buffer[] = [];
+      req.on("data", (c) => chunks.push(c));
+      req.on("end", () => {
+        void (async () => {
+          try {
+            const payload = JSON.parse(Buffer.concat(chunks).toString("utf8")) as {
+              action_id?: string;
+              value?: string;
+              channel?: string;
+              message_ts?: string;
+              blocks?: unknown;
+              user_id?: string;
+            };
+            const result = await handleParentEmailAction({
+              actionId: String(payload.action_id || ""),
+              value: String(payload.value || ""),
+              channel: String(payload.channel || ""),
+              messageTs: String(payload.message_ts || ""),
+              messageBlocks: payload.blocks,
+              client: web,
+              userId: payload.user_id,
+            });
+            res.writeHead(200, { "content-type": "application/json" });
+            res.end(JSON.stringify(result));
+          } catch (err) {
+            res.writeHead(500, { "content-type": "application/json" });
+            res.end(JSON.stringify({ ok: false, error: String(err) }));
+          }
+        })();
+      });
+    });
+    hook.listen(8791, "127.0.0.1", () => {
+      console.log("[boot] parent-email test hook on 127.0.0.1:8791");
+    });
+  }
 
   const shutdown = async () => {
     console.log("[boot] shutting down");
