@@ -142,8 +142,19 @@ async function main(): Promise<void> {
     const child = spawn("bash", args, {
       cwd: hub,
       detached: true,
-      stdio: "ignore",
+      stdio: ["ignore", "pipe", "pipe"],
       env: process.env,
+    });
+    let out = "";
+    child.stdout?.on("data", (chunk: Buffer) => {
+      out += chunk.toString();
+    });
+    child.stderr?.on("data", (chunk: Buffer) => {
+      out += chunk.toString();
+    });
+    child.on("exit", (code) => {
+      const snip = out.trim().slice(-800);
+      console.log(`[parent-email] exit=${code}${snip ? ` :: ${snip}` : ""}`);
     });
     child.unref();
   });
