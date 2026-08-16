@@ -253,7 +253,7 @@ async function main(): Promise<void> {
               channel,
               ts: messageTs,
               text: optimistic.text,
-              blocks: optimistic.blocks,
+              blocks: optimistic.blocks as never,
             });
           }
         } else {
