@@ -100,10 +100,116 @@ async function main(): Promise<void> {
   });
 
   // Parent-email approve buttons (orders-mvp) — ack fast, spawn CLI (no agent wake).
-  // Slack has no disabled-button attribute; replace the message immediately so
-  // users do not double-click during the ~10s vault/Gmail work.
+  // Slack has no disabled-button attribute. Trash: drop that row immediately and keep
+  // the rest. Send All: replace with Working… until the CLI finishes.
   // https://docs.slack.dev/reference/block-kit/block-elements/button-element
   const parentEmailActions = new Set(["parent_email_trash", "parent_email_send_all"]);
+
+  function optimisticTrashBlocks(
+    rawBlocks: unknown,
+    trashId: string,
+  ): { text: string; blocks: Record<string, unknown>[] } | null {
+    if (!Array.isArray(rawBlocks) || !trashId) return null;
+    type Block = Record<string, unknown>;
+    const blocks = rawBlocks.map((b) => ({ ...(b as Block) })) as Block[];
+
+    const isItemTrashRow = (b: Block): boolean => {
+      const accessory = b.accessory as Record<string, unknown> | undefined;
+      return (
+        b.type === "section" &&
+        !!accessory &&
+        accessory.type === "button" &&
+        accessory.action_id === "parent_email_trash"
+      );
+    };
+
+    const remainingItems = blocks.filter(
+      (b) => isItemTrashRow(b) && String((b.accessory as { value?: string }).value || "") !== trashId,
+    );
+    const header = blocks.find((b) => b.type === "section" && !b.accessory);
+    const actions = blocks.find((b) => b.type === "actions");
+    const context = blocks.find((b) => b.type === "context");
+
+    const mentionMatch =
+      typeof (header?.text as { text?: string } | undefined)?.text === "string"
+        ? String((header?.text as { text: string }).text).match(/^<@[A-Z0-9]+>|@\S+/)
+        : null;
+    const mention = mentionMatch?.[0] || "<@cian>";
+
+    if (remainingItems.length === 0) {
+      const text = `${mention} Parent emails: all clear — none pending.`;
+      return {
+        text,
+        blocks: [{ type: "section", text: { type: "mrkdwn", text } }],
+      };
+    }
+
+    const headerText = `${mention} Parent emails awaiting send (${remainingItems.length})`;
+    const itemBlocks = remainingItems.map((b, i) => {
+      const prev = String((b.text as { text?: string } | undefined)?.text || "");
+      const withoutNum = prev.replace(/^\d+\.\s*/, "");
+      const label = `${i + 1}. ${withoutNum}`;
+      return {
+        type: "section",
+        text: { type: "mrkdwn", text: label },
+        accessory: {
+          type: "button",
+          text: { type: "plain_text", text: "Trash" },
+          action_id: "parent_email_trash",
+          value: String((b.accessory as { value?: string }).value || ""),
+          style: "danger",
+        },
+      };
+    });
+
+    const out: Block[] = [
+      { type: "section", text: { type: "mrkdwn", text: headerText } },
+      ...itemBlocks,
+    ];
+    if (actions) {
+      // Rebuild Send All without stale block_id
+      out.push({
+        type: "actions",
+        elements: [
+          {
+            type: "button",
+            text: { type: "plain_text", text: "Send All" },
+            action_id: "parent_email_send_all",
+            value: "all",
+            style: "primary",
+            confirm: {
+              title: { type: "plain_text", text: "Send all pending?" },
+              text: {
+                type: "mrkdwn",
+                text:
+                  "This sends the remaining Gmail drafts (and held SMS) now. " +
+                  "You’ll see a Working… state until it finishes.",
+              },
+              confirm: { type: "plain_text", text: "Send All" },
+              deny: { type: "plain_text", text: "Cancel" },
+            },
+          },
+        ],
+      });
+    }
+    if (context) {
+      out.push({
+        type: "context",
+        elements: [
+          {
+            type: "mrkdwn",
+            text: "Or reply: `send all` | `discard 2`",
+          },
+        ],
+      });
+    }
+    const text =
+      headerText +
+      "\n" +
+      itemBlocks.map((b) => String((b.text as { text: string }).text)).join("\n");
+    return { text, blocks: out };
+  }
+
   app.action(/.*/, async ({ ack, body, action, client }) => {
     await ack();
     const actionId =
@@ -133,26 +239,40 @@ async function main(): Promise<void> {
       body && typeof body === "object" && "message" in body
         ? String((body as { message?: { ts?: string } }).message?.ts || "")
         : "";
+    const messageBlocks =
+      body && typeof body === "object" && "message" in body
+        ? (body as { message?: { blocks?: unknown } }).message?.blocks
+        : undefined;
 
-    const workingLabel =
-      actionId === "parent_email_trash"
-        ? ":hourglass_flowing_sand: *Trashing…* Updating the list — hang tight."
-        : ":hourglass_flowing_sand: *Sending…* Gmail drafts + SMS — hang tight (do not click again).";
     if (channel && messageTs) {
       try {
-        await client.chat.update({
-          channel,
-          ts: messageTs,
-          text: workingLabel.replace(/:[a-z_]+:\s*/g, "").replace(/\*/g, ""),
-          blocks: [
-            {
-              type: "section",
-              text: { type: "mrkdwn", text: workingLabel },
-            },
-          ],
-        });
+        if (actionId === "parent_email_trash") {
+          const optimistic = optimisticTrashBlocks(messageBlocks, value);
+          if (optimistic) {
+            await client.chat.update({
+              channel,
+              ts: messageTs,
+              text: optimistic.text,
+              blocks: optimistic.blocks,
+            });
+          }
+        } else {
+          const workingLabel =
+            ":hourglass_flowing_sand: *Sending…* Gmail drafts + SMS — hang tight (do not click again).";
+          await client.chat.update({
+            channel,
+            ts: messageTs,
+            text: "Sending… hang tight (do not click again).",
+            blocks: [
+              {
+                type: "section",
+                text: { type: "mrkdwn", text: workingLabel },
+              },
+            ],
+          });
+        }
       } catch (err) {
-        console.warn(`[parent-email] working-state update failed: ${String(err)}`);
+        console.warn(`[parent-email] optimistic update failed: ${String(err)}`);
       }
     }
 
