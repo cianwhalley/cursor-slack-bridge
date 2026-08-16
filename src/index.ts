@@ -1,5 +1,7 @@
 import { App } from "@slack/bolt";
 import { WebClient } from "@slack/web-api";
+import { spawn } from "node:child_process";
+import { resolve } from "node:path";
 import { CursorAgentRunner } from "./agent-runner.js";
 import { loadConfig } from "./config.js";
 import { MessageRouter } from "./router.js";
@@ -97,9 +99,53 @@ async function main(): Promise<void> {
     router.handleEvent(event as SlackEventLikeCompat);
   });
 
-  // Interactivity stub — ack only (buttons later)
-  app.action(/.*/, async ({ ack }) => {
+  // Parent-email approve buttons (orders-mvp) — ack fast, spawn CLI (no agent wake).
+  const parentEmailActions = new Set(["parent_email_trash", "parent_email_send_all"]);
+  app.action(/.*/, async ({ ack, body, action }) => {
     await ack();
+    const actionId =
+      action && typeof action === "object" && "action_id" in action
+        ? String((action as { action_id?: string }).action_id || "")
+        : "";
+    if (!parentEmailActions.has(actionId)) {
+      return;
+    }
+    const userId =
+      body && typeof body === "object" && "user" in body
+        ? String((body as { user?: { id?: string } }).user?.id || "")
+        : "";
+    if (config.allowedUserIds.size > 0 && userId && !config.allowedUserIds.has(userId)) {
+      console.warn(`[parent-email] ignore action from non-allowlisted user=${userId}`);
+      return;
+    }
+    const value =
+      action && typeof action === "object" && "value" in action
+        ? String((action as { value?: string }).value || "")
+        : "";
+    const channel =
+      body && typeof body === "object" && "channel" in body
+        ? String((body as { channel?: { id?: string } }).channel?.id || "")
+        : "";
+    const messageTs =
+      body && typeof body === "object" && "message" in body
+        ? String((body as { message?: { ts?: string } }).message?.ts || "")
+        : "";
+    const hub = config.workspace;
+    const script = resolve(hub, "skills/orders-mvp-sync/scripts/run-parent-email-approve.sh");
+    const args = [script, "--action", actionId === "parent_email_trash" ? "trash" : "send_all"];
+    if (actionId === "parent_email_trash" && value) {
+      args.push("--id", value);
+    }
+    if (channel) args.push("--channel", channel);
+    if (messageTs) args.push("--message-ts", messageTs);
+    console.log(`[parent-email] spawn ${args.join(" ")}`);
+    const child = spawn("bash", args, {
+      cwd: hub,
+      detached: true,
+      stdio: "ignore",
+      env: process.env,
+    });
+    child.unref();
   });
 
   const shutdown = async () => {
