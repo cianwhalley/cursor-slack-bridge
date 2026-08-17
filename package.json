@@ -27,7 +27,7 @@
   },
   "dependencies": {
     "@slack/bolt": "^4.4.0",
-    "@slack/web-api": "^7.10.0",
+    "@slack/web-api": "^8.0.0",
     "dotenv": "^16.5.0"
   },
   "devDependencies": {
