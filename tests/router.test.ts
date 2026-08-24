@@ -35,6 +35,8 @@ function cfg(): BridgeConfig {
     progressCommentary: false,
     sessionTimeoutSeconds: 900,
     botUserId: bot,
+    agentModel: "cursor-grok-4.5-high-fast",
+    agentModelFallback: "auto",
   };
 }
 
@@ -263,6 +265,56 @@ describe("MessageRouter", () => {
     expect(
       slack.posts.some((p) => p.text.includes("Still working on your last message")),
     ).toBe(true);
+    sessions.close();
+  });
+
+  it("retries with auto on fast usage limit and notifies Slack", async () => {
+    const slack = mockSlack();
+    const usageErr =
+      "ActionRequiredError: Increase limits for faster responses You're out of usage. Switch to Auto, or ask your admin to increase your limit to continue.";
+    const runPrompt = vi
+      .fn()
+      .mockResolvedValueOnce({
+        status: "error" as const,
+        chatId: "chat-1",
+        text: usageErr,
+        exitCode: 1,
+        stderr: "",
+      })
+      .mockResolvedValueOnce({
+        status: "ok" as const,
+        chatId: "chat-1",
+        text: "answer after auto",
+        exitCode: 0,
+        stderr: "",
+      });
+    const runner: AgentRunner = {
+      createChat: vi.fn(async () => "chat-1"),
+      runPrompt,
+      stop: vi.fn(() => false),
+    };
+    const sessions = new SessionStore(cfg().sessionDb);
+    const router = new MessageRouter({
+      config: cfg(),
+      sessions,
+      runner,
+      slack: slack.client,
+    });
+
+    await router.process({
+      channel: "D1",
+      channel_type: "im",
+      user: "U1",
+      text: "hi",
+      ts: "1.0",
+    });
+
+    expect(runPrompt).toHaveBeenCalledTimes(2);
+    expect(runPrompt.mock.calls[0][0].model).toBe("cursor-grok-4.5-high-fast");
+    expect(runPrompt.mock.calls[1][0].model).toBe("auto");
+    expect(slack.posts.some((p) => p.text.includes("Switching to Auto mode"))).toBe(true);
+    expect(slack.posts.some((p) => p.text.includes("Retried in Auto mode"))).toBe(true);
+    expect(slack.posts.some((p) => p.text.includes("answer after auto"))).toBe(true);
     sessions.close();
   });
 });

@@ -14,6 +14,8 @@ export interface BridgeConfig {
   workspace: string;
   /** Optional Cursor model id (e.g. cursor-grok-4.5-high-fast). Passed as agent --model. */
   agentModel: string | undefined;
+  /** When primary model hits usage limits, retry with this id (default auto). Set off|none to disable. */
+  agentModelFallback: string | undefined;
   sessionDb: string;
   dmPolicy: DmPolicy;
   allowedUserIds: Set<string>;
@@ -85,6 +87,14 @@ function parseChannelPolicy(raw: string | undefined): ChannelPolicy {
   throw new Error(`CHANNEL_POLICY must be configured|any, got ${JSON.stringify(raw)}`);
 }
 
+function parseModelFallback(raw: string | undefined): string | undefined {
+  const value = (raw ?? "auto").trim();
+  if (!value || /^(off|none|false|disabled)$/i.test(value)) {
+    return undefined;
+  }
+  return value;
+}
+
 export function loadConfig(envPath?: string): BridgeConfig {
   if (envPath) {
     loadDotenv({ path: envPath });
@@ -111,6 +121,7 @@ export function loadConfig(envPath?: string): BridgeConfig {
     agentBin: process.env.AGENT_BIN?.trim() || "agent",
     workspace: resolve(requireEnv("WORKSPACE")),
     agentModel: process.env.AGENT_MODEL?.trim() || undefined,
+    agentModelFallback: parseModelFallback(process.env.AGENT_MODEL_FALLBACK),
     sessionDb: resolve(process.env.SESSION_DB?.trim() || "./cursor-slack.db"),
     dmPolicy,
     allowedUserIds,

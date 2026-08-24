@@ -16,6 +16,14 @@ import {
 } from "./progress.js";
 import { progressFromStreamLine } from "./stream-events.js";
 import type { SessionStore } from "./sessions.js";
+import {
+  autoModeReplyPrefix,
+  shouldRetryWithAuto,
+  switchingToAutoNotice,
+  usageLimitReason,
+  agentErrorText,
+} from "./model-fallback.js";
+import type { RunPromptResult } from "./agent-runner.js";
 
 export interface SlackClient {
   reactions: SlackReactions;
@@ -216,14 +224,28 @@ export class MessageRouter {
 
     try {
       let chatId = sessions.get(channelId, threadKey)?.cursorChatId;
+      const primaryModel = config.agentModel;
+      const fallbackModel = config.agentModelFallback;
+      let forcedModel: string | undefined;
+      let createAutoReason: string | undefined;
 
       if (!chatId) {
-        chatId = await runner.createChat(
-          config.agentBin,
-          config.workspace,
-          config.cursorApiKey,
-          config.agentModel,
+        const created = await this.createChatWithFallback(
+          runner,
+          config,
+          fallbackModel,
+          primaryModel,
+          async (reason) => {
+            createAutoReason = reason;
+            await slack.poster.post(
+              decision.channelId,
+              switchingToAutoNotice(reason),
+              replyThreadTs,
+            );
+          },
         );
+        chatId = created.chatId;
+        forcedModel = created.forcedModel;
         sessions.upsert(channelId, threadKey, chatId, decision.label);
       } else {
         sessions.touch(channelId, threadKey);
@@ -237,14 +259,14 @@ export class MessageRouter {
       const prompt = buildPrompt(prefix, decision.text);
 
       this.activeRunKeys.set(sessionKey, chatId);
-      const result = await runner.runPrompt({
-        agentBin: config.agentBin,
-        workspace: config.workspace,
+      const { result, autoReason } = await this.runPromptWithFallback({
+        runner,
+        config,
         chatId,
         prompt,
-        cursorApiKey: config.cursorApiKey,
-        model: config.agentModel,
-        timeoutSeconds: config.sessionTimeoutSeconds,
+        primaryModel: forcedModel ?? primaryModel,
+        fallbackModel,
+        skipFallbackRetry: Boolean(forcedModel),
         onStdoutLine: (line) => {
           const ev = progressFromStreamLine(line, {
             detailMode: config.toolProgressDetail,
@@ -256,15 +278,28 @@ export class MessageRouter {
             void progress.noteProgress(ev.line, ev.statusPhrase);
           }
         },
+        onSwitchingToAuto: async (reason) => {
+          await slack.poster.post(
+            decision.channelId,
+            switchingToAutoNotice(reason),
+            replyThreadTs,
+          );
+        },
       });
       this.activeRunKeys.delete(sessionKey);
+
+      const finalAutoReason = autoReason ?? createAutoReason;
 
       if (result.chatId && result.chatId !== chatId) {
         sessions.upsert(channelId, threadKey, result.chatId, decision.label);
       }
 
       if (result.status === "ok" || (result.text && result.status !== "error")) {
-        await progress.succeed(result.text || "_No text response._", postChunks);
+        let text = result.text || "_No text response._";
+        if (finalAutoReason) {
+          text = autoModeReplyPrefix(finalAutoReason) + text;
+        }
+        await progress.succeed(text, postChunks);
       } else {
         const errText =
           result.status === "timeout"
@@ -281,5 +316,104 @@ export class MessageRouter {
         postChunks,
       );
     }
+  }
+
+  private async createChatWithFallback(
+    runner: AgentRunner,
+    config: BridgeConfig,
+    fallbackModel: string | undefined,
+    primaryModel: string | undefined,
+    onSwitchingToAuto: (reason: string) => Promise<void>,
+  ): Promise<{ chatId: string; forcedModel?: string }> {
+    try {
+      const chatId = await runner.createChat(
+        config.agentBin,
+        config.workspace,
+        config.cursorApiKey,
+        primaryModel,
+      );
+      return { chatId };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (
+        shouldRetryWithAuto({
+          primaryModel,
+          fallbackModel,
+          errorText: msg,
+          status: "error",
+        })
+      ) {
+        const reason = usageLimitReason(msg);
+        await onSwitchingToAuto(reason);
+        const chatId = await runner.createChat(
+          config.agentBin,
+          config.workspace,
+          config.cursorApiKey,
+          fallbackModel,
+        );
+        return { chatId, forcedModel: fallbackModel };
+      }
+      throw err;
+    }
+  }
+
+  private async runPromptWithFallback(opts: {
+    runner: AgentRunner;
+    config: BridgeConfig;
+    chatId: string;
+    prompt: string;
+    primaryModel: string | undefined;
+    fallbackModel: string | undefined;
+    skipFallbackRetry?: boolean;
+    onStdoutLine: (line: string) => void;
+    onSwitchingToAuto: (reason: string) => Promise<void>;
+  }): Promise<{ result: RunPromptResult; autoReason?: string }> {
+    const {
+      runner,
+      config,
+      chatId,
+      prompt,
+      primaryModel,
+      fallbackModel,
+      skipFallbackRetry,
+      onStdoutLine,
+      onSwitchingToAuto,
+    } = opts;
+
+    const run = (model: string | undefined) =>
+      runner.runPrompt({
+        agentBin: config.agentBin,
+        workspace: config.workspace,
+        chatId,
+        prompt,
+        cursorApiKey: config.cursorApiKey,
+        model,
+        timeoutSeconds: config.sessionTimeoutSeconds,
+        onStdoutLine,
+      });
+
+    let result = await run(primaryModel);
+    if (skipFallbackRetry) {
+      return { result };
+    }
+    const errText = agentErrorText(result);
+    if (
+      !shouldRetryWithAuto({
+        primaryModel,
+        fallbackModel,
+        errorText: errText,
+        status: result.status,
+      })
+    ) {
+      return { result };
+    }
+
+    const reason = usageLimitReason(errText);
+    await onSwitchingToAuto(reason);
+    result = await run(fallbackModel);
+    if (result.status === "ok" || (result.text && result.status !== "error")) {
+      return { result, autoReason: reason };
+    }
+    return { result };
   }
 }
