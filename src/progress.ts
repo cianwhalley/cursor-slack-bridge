@@ -119,8 +119,12 @@ export class ProgressTracker {
     await this.renderDraft();
   }
 
-  async succeed(finalText: string, postChunks: (text: string) => Promise<void>): Promise<void> {
-    await this.finish("white_check_mark", finalText, postChunks, false);
+  async succeed(
+    finalText: string,
+    postChunks: (text: string) => Promise<void>,
+    opts?: { forcePost?: boolean },
+  ): Promise<void> {
+    await this.finish("white_check_mark", finalText, postChunks, false, opts?.forcePost);
   }
 
   async fail(errorText: string, postChunks: (text: string) => Promise<void>): Promise<void> {
@@ -132,6 +136,7 @@ export class ProgressTracker {
     text: string,
     postChunks: (text: string) => Promise<void>,
     isError: boolean,
+    forcePost = false,
   ): Promise<void> {
     if (this.finished) return;
     this.finished = true;
@@ -141,7 +146,12 @@ export class ProgressTracker {
     const body = text.trim() || (isError ? "Error." : "_No text response._");
 
     try {
-      if (this.draftTs && this.opts.poster.update && body.length <= this.opts.textChunkLimit) {
+      if (
+        !forcePost &&
+        this.draftTs &&
+        this.opts.poster.update &&
+        body.length <= this.opts.textChunkLimit
+      ) {
         await this.opts.poster.update(this.opts.channelId, this.draftTs, body);
       } else {
         if (this.draftTs && this.opts.poster.delete) {

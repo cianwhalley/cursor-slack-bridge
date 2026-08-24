@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   AUTO_MODEL,
   agentErrorText,
+  autoModeReplyPrefix,
   isUsageLimitError,
   shouldRetryWithAuto,
   switchingToAutoNotice,
@@ -49,8 +50,20 @@ describe("model-fallback", () => {
     ).toBe(false);
   });
 
+  it("retries when usage limit appears as ok assistant text", () => {
+    expect(
+      shouldRetryWithAuto({
+        primaryModel: "cursor-grok-4.5-high-fast",
+        fallbackModel: AUTO_MODEL,
+        errorText: "ActionRequiredError: out of usage",
+        status: "ok",
+      }),
+    ).toBe(true);
+  });
+
   it("formats switching notice", () => {
     expect(switchingToAutoNotice("out of usage")).toContain("Switching to Auto mode");
+    expect(autoModeReplyPrefix("out of usage")).toContain("Reply via Auto mode");
   });
 
   it("agentErrorText merges stderr and text", () => {

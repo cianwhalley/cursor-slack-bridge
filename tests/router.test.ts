@@ -313,7 +313,7 @@ describe("MessageRouter", () => {
     expect(runPrompt.mock.calls[0][0].model).toBe("cursor-grok-4.5-high-fast");
     expect(runPrompt.mock.calls[1][0].model).toBe("auto");
     expect(slack.posts.some((p) => p.text.includes("Switching to Auto mode"))).toBe(true);
-    expect(slack.posts.some((p) => p.text.includes("Retried in Auto mode"))).toBe(true);
+    expect(slack.posts.some((p) => p.text.includes("Reply via Auto mode"))).toBe(true);
     expect(slack.posts.some((p) => p.text.includes("answer after auto"))).toBe(true);
     sessions.close();
   });

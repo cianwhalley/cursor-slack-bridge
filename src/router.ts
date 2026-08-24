@@ -18,6 +18,7 @@ import { progressFromStreamLine } from "./stream-events.js";
 import type { SessionStore } from "./sessions.js";
 import {
   autoModeReplyPrefix,
+  progressAutoSwitchLine,
   shouldRetryWithAuto,
   switchingToAutoNotice,
   usageLimitReason,
@@ -237,6 +238,7 @@ export class MessageRouter {
           primaryModel,
           async (reason) => {
             createAutoReason = reason;
+            await progress.noteProgress(progressAutoSwitchLine(reason));
             await slack.poster.post(
               decision.channelId,
               switchingToAutoNotice(reason),
@@ -279,12 +281,14 @@ export class MessageRouter {
           }
         },
         onSwitchingToAuto: async (reason) => {
+          await progress.noteProgress(progressAutoSwitchLine(reason));
           await slack.poster.post(
             decision.channelId,
             switchingToAutoNotice(reason),
             replyThreadTs,
           );
         },
+        knownAutoReason: createAutoReason,
       });
       this.activeRunKeys.delete(sessionKey);
 
@@ -299,7 +303,7 @@ export class MessageRouter {
         if (finalAutoReason) {
           text = autoModeReplyPrefix(finalAutoReason) + text;
         }
-        await progress.succeed(text, postChunks);
+        await progress.succeed(text, postChunks, { forcePost: Boolean(finalAutoReason) });
       } else {
         const errText =
           result.status === "timeout"
@@ -365,6 +369,7 @@ export class MessageRouter {
     primaryModel: string | undefined;
     fallbackModel: string | undefined;
     skipFallbackRetry?: boolean;
+    knownAutoReason?: string;
     onStdoutLine: (line: string) => void;
     onSwitchingToAuto: (reason: string) => Promise<void>;
   }): Promise<{ result: RunPromptResult; autoReason?: string }> {
@@ -376,6 +381,7 @@ export class MessageRouter {
       primaryModel,
       fallbackModel,
       skipFallbackRetry,
+      knownAutoReason,
       onStdoutLine,
       onSwitchingToAuto,
     } = opts;
@@ -393,27 +399,29 @@ export class MessageRouter {
       });
 
     let result = await run(primaryModel);
+    let autoReason = knownAutoReason;
+
     if (skipFallbackRetry) {
-      return { result };
+      return { result, autoReason };
     }
+
     const errText = agentErrorText(result);
     if (
-      !shouldRetryWithAuto({
+      shouldRetryWithAuto({
         primaryModel,
         fallbackModel,
         errorText: errText,
         status: result.status,
       })
     ) {
-      return { result };
+      autoReason = usageLimitReason(errText);
+      console.warn(
+        `[router] fast model limit — switching to ${fallbackModel}: ${autoReason}`,
+      );
+      await onSwitchingToAuto(autoReason);
+      result = await run(fallbackModel);
     }
 
-    const reason = usageLimitReason(errText);
-    await onSwitchingToAuto(reason);
-    result = await run(fallbackModel);
-    if (result.status === "ok" || (result.text && result.status !== "error")) {
-      return { result, autoReason: reason };
-    }
-    return { result };
+    return { result, autoReason };
   }
 }

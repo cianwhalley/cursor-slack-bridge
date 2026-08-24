@@ -190,6 +190,32 @@ describe("CursorAgentRunner", () => {
     ).toBe("final");
   });
 
+  it("propagates usage limit assistant text as error", async () => {
+    const usageErr =
+      "ActionRequiredError: Increase limits for faster responses You're out of usage. Switch to Auto.";
+    mockedSpawn.mockImplementation(
+      () =>
+        fakeChild({
+          stdoutText:
+            JSON.stringify({
+              type: "assistant",
+              message: { content: [{ type: "text", text: usageErr }] },
+            }) + "\n",
+          code: 0,
+        }) as never,
+    );
+    const r = new CursorAgentRunner();
+    const result = await r.runPrompt({
+      agentBin: "agent",
+      workspace: "/ws",
+      chatId: "c1",
+      prompt: "x",
+      timeoutSeconds: 30,
+    });
+    expect(result.status).toBe("error");
+    expect(result.text).toContain("out of usage");
+  });
+
   it("propagates non-zero exit without text as error", async () => {
     mockedSpawn.mockImplementation(
       () => fakeChild({ code: 2, stderrText: "boom", stdoutText: "" }) as never,

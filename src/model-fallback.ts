@@ -34,22 +34,30 @@ export function usageLimitReason(text: string): string {
 }
 
 export function switchingToAutoNotice(reason: string): string {
-  return `*Switching to Auto mode* — ${reason}. Retrying your message…`;
+  return `⚡ *Switching to Auto mode* — ${reason}. Retrying your message…`;
 }
 
 export function autoModeReplyPrefix(reason: string): string {
-  return `_Retried in Auto mode (${reason})._\n\n`;
+  return `⚡ *Reply via Auto mode* — ${reason}\n\n`;
 }
 
+export function progressAutoSwitchLine(reason: string): string {
+  return `⚡ Switching to Auto mode — ${reason}`;
+}
+
+/** True when the pinned model failed and we should retry with fallback. */
 export function shouldRetryWithAuto(opts: {
   primaryModel: string | undefined;
   fallbackModel: string | undefined;
   errorText: string;
   status: string;
-}): opts is { fallbackModel: string; primaryModel: string; errorText: string; status: string } {
+}): boolean {
   const { primaryModel, fallbackModel, errorText, status } = opts;
   if (!primaryModel || !fallbackModel) return false;
   if (primaryModel === fallbackModel || primaryModel === AUTO_MODEL) return false;
-  if (status !== "error" && status !== "timeout") return false;
-  return isUsageLimitError(errorText);
+  if (!isUsageLimitError(errorText)) return false;
+  if (status === "error" || status === "timeout") return true;
+  // Cursor sometimes surfaces the limit as assistant text with exit 0.
+  if (status === "ok") return true;
+  return false;
 }

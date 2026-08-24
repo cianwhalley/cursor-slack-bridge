@@ -1,6 +1,7 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { createInterface } from "node:readline";
 import { extractAssistantText } from "./stream-events.js";
+import { isUsageLimitError } from "./model-fallback.js";
 
 type ActiveChild = ChildProcess & { __markStopped?: () => void };
 
@@ -200,6 +201,17 @@ export class CursorAgentRunner implements AgentRunner {
           return;
         }
         const text = extractAssistantText(lines);
+        const errBlob = [text, stderr].filter(Boolean).join("\n").trim();
+        if (isUsageLimitError(errBlob)) {
+          resolve({
+            status: "error",
+            chatId,
+            text: text.trim() || stderr.trim() || errBlob,
+            exitCode: code,
+            stderr,
+          });
+          return;
+        }
         if (code !== 0 && !text) {
           resolve({ status: "error", chatId, text: stderr.trim() || `agent exited ${code}`, exitCode: code, stderr });
           return;
