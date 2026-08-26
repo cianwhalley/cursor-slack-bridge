@@ -18,9 +18,7 @@ import { progressFromStreamLine } from "./stream-events.js";
 import type { SessionStore } from "./sessions.js";
 import {
   autoModeReplyPrefix,
-  progressAutoSwitchLine,
   shouldRetryWithAuto,
-  switchingToAutoNotice,
   usageLimitReason,
   agentErrorText,
 } from "./model-fallback.js";
@@ -238,12 +236,6 @@ export class MessageRouter {
           primaryModel,
           async (reason) => {
             createAutoReason = reason;
-            await progress.noteProgress(progressAutoSwitchLine(reason));
-            await slack.poster.post(
-              decision.channelId,
-              switchingToAutoNotice(reason),
-              replyThreadTs,
-            );
           },
         );
         chatId = created.chatId;
@@ -280,13 +272,8 @@ export class MessageRouter {
             void progress.noteProgress(ev.line, ev.statusPhrase);
           }
         },
-        onSwitchingToAuto: async (reason) => {
-          await progress.noteProgress(progressAutoSwitchLine(reason));
-          await slack.poster.post(
-            decision.channelId,
-            switchingToAutoNotice(reason),
-            replyThreadTs,
-          );
+        onSwitchingToAuto: async (_reason) => {
+          // Final reply is prefixed with Auto mode — no extra Slack post or draft line.
         },
         knownAutoReason: createAutoReason,
       });

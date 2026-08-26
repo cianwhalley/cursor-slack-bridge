@@ -145,6 +145,18 @@ export class ProgressTracker {
 
     const body = text.trim() || (isError ? "Error." : "_No text response._");
 
+    const publishFinal = async () => {
+      if (this.draftTs && this.opts.poster.delete) {
+        try {
+          await this.opts.poster.delete(this.opts.channelId, this.draftTs);
+        } catch {
+          // still post final — avoid leaving a stale draft beside the answer
+        }
+        this.draftTs = undefined;
+      }
+      await postChunks(body);
+    };
+
     try {
       if (
         !forcePost &&
@@ -154,17 +166,10 @@ export class ProgressTracker {
       ) {
         await this.opts.poster.update(this.opts.channelId, this.draftTs, body);
       } else {
-        if (this.draftTs && this.opts.poster.delete) {
-          try {
-            await this.opts.poster.delete(this.opts.channelId, this.draftTs);
-          } catch {
-            // keep draft if delete fails; still post final
-          }
-        }
-        await postChunks(body);
+        await publishFinal();
       }
     } catch {
-      await postChunks(body);
+      await publishFinal();
     }
 
     if (this.canStatus) {
