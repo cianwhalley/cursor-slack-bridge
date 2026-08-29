@@ -16,6 +16,6 @@ When hub *skills* need OAuth or API keys on the VPS (mail, issue trackers, billi
 
 Do **not** put the vault on a public URL. Bind loopback, plus Tailscale if the laptop must reach it.
 
-The Slack process can optionally run under `agent-vault run` via `ops/run-bridge.sh` so OpenRouter STT keys inject over MITM. Hub *skills* (ElevenLabs TTS, mail, trackers) still source the hub `vault-env.sh`. Keep Slack tokens out of the agent child (already enforced in `src/agent-runner.ts`).
+The Slack **Node process must not** run under `agent-vault run`. Process-wide `HTTPS_PROXY` breaks the Cursor agent CLI (HTTP/2 ALPN — `tlsv1 alert no application protocol`, SSL alert 120). `ops/run-bridge.sh` sources hub `vault-env.sh` so STT can make a **one-shot** `agent-vault run -- curl` to OpenRouter. Hub skills still `source vault-env.sh` themselves. Slack tokens stay out of the agent child (`src/agent-runner.ts` also strips proxy env).
 
 Start without a vault. Add one when a skill actually needs it.

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Start the Slack bridge for systemd instance %i (cleo | silas | …).
-# Prefers Agent Vault MITM for STT keys; host-file fallback is temporary.
-# Never prints secret values.
+# Loads instance env + hub vault-env (token for one-shot STT). Never prints secrets.
+# Do not wrap Node in agent-vault run — that proxies Cursor HTTP/2 and fails ALPN.
 set -euo pipefail
 
 INSTANCE="${1:-}"
@@ -59,7 +59,7 @@ BRIDGE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$BRIDGE_DIR"
 NODE_BIN="${NODE_BIN:-/usr/bin/node}"
 
-if command -v agent-vault >/dev/null 2>&1 && [[ -n "${AGENT_VAULT_TOKEN:-}" ]]; then
-  exec agent-vault run -- "$NODE_BIN" "$BRIDGE_DIR/dist/index.js"
-fi
+# Do NOT wrap this Node process in `agent-vault run`. MITM HTTPS_PROXY breaks
+# Cursor agent HTTP/2 (SSL alert 120 / no application protocol) and can
+# interfere with Slack. STT uses a one-shot vault curl from Node when needed.
 exec "$NODE_BIN" "$BRIDGE_DIR/dist/index.js"

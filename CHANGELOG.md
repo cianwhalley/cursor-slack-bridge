@@ -9,7 +9,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Added
 
 - Slack **voice notes + file ingest**: download attachments (`files:read`), transcribe audio in the bridge (OpenRouter / Whisper) as `[Voice message]: …`, stage other files under `$WORKSPACE/.slack-inbox/`. Empty-caption voice notes engage. When inbound was voice, the agent is instructed to reply with `VOICE_REPLY: /path.mp3`; the bridge uploads and deletes the file.
-- `ops/run-bridge.sh` wraps the Node process with Agent Vault MITM (STT keys) plus optional host-file fallback.
+- `ops/run-bridge.sh` loads instance env + hub vault token. STT uses a one-shot vault curl when no OpenRouter key is in env.
+
+### Fixed
+
+- Do **not** wrap the long-lived Node process in `agent-vault run`. MITM `HTTPS_PROXY` made Cursor agent HTTP/2 fail (`SSL routines:tlsv1 alert no application protocol`). Agent children also strip proxy env.
 
 ### Added (earlier)
 

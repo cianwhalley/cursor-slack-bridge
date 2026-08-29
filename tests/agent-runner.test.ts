@@ -43,11 +43,15 @@ function fakeChild(opts: {
   it("strips Slack tokens from child env", async () => {
     process.env.SLACK_BOT_TOKEN = "xoxb-secret";
     process.env.SLACK_APP_TOKEN = "xapp-secret";
+    process.env.HTTPS_PROXY = "http://127.0.0.1:14322";
+    process.env.https_proxy = "http://127.0.0.1:14322";
     mockedSpawn.mockImplementation((_bin, _args, spawnOpts) => {
       expect(spawnOpts?.cwd).toBe("/ws");
       expect(spawnOpts?.env?.SLACK_BOT_TOKEN).toBeUndefined();
       expect(spawnOpts?.env?.SLACK_APP_TOKEN).toBeUndefined();
       expect(spawnOpts?.env?.CURSOR_API_KEY).toBe("k-test");
+      expect(spawnOpts?.env?.HTTPS_PROXY).toBeUndefined();
+      expect(spawnOpts?.env?.https_proxy).toBeUndefined();
       return fakeChild({
         stdoutText: "2ebc41d7-5857-4ebd-9577-092d90e287e8\n",
       }) as never;
@@ -56,6 +60,8 @@ function fakeChild(opts: {
     await r.createChat("agent", "/ws", "k-test");
     delete process.env.SLACK_BOT_TOKEN;
     delete process.env.SLACK_APP_TOKEN;
+    delete process.env.HTTPS_PROXY;
+    delete process.env.https_proxy;
   });
 
 describe("CursorAgentRunner", () => {

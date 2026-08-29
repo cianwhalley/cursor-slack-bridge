@@ -6,7 +6,7 @@ Production install lives in **[docs/install.md](../docs/install.md)**. This fold
 |---------------|------|
 | `bootstrap-service-user.sh` | Create a non-sudo service user + linger |
 | `install-bridge.sh` | Clone, build, install `cursor-slack@.service` |
-| `run-bridge.sh` | systemd `ExecStart` — vault MITM + instance env |
+| `run-bridge.sh` | systemd `ExecStart` — instance env + vault token for one-shot STT (do not wrap Node) |
 | `cursor-slack@.service` | systemd user template (`%i` = instance name) |
 | `env.example` | Per-instance env (copy to `~/.config/cursor-slack/<name>.env`, mode 600) |
 | `legacy/cutover-nanoclaw.sh` | Historical NanoClaw → bridge cutover (not part of a new install) |

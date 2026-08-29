@@ -42,6 +42,20 @@ function childEnv(cursorApiKey?: string): NodeJS.ProcessEnv {
   const env = { ...process.env };
   delete env.SLACK_BOT_TOKEN;
   delete env.SLACK_APP_TOKEN;
+  // Vault MITM on the bridge process must not reach Cursor's HTTP/2 API
+  // (tlsv1 alert no application protocol / SSL alert 120).
+  for (const key of [
+    "HTTPS_PROXY",
+    "HTTP_PROXY",
+    "ALL_PROXY",
+    "https_proxy",
+    "http_proxy",
+    "all_proxy",
+    "NO_PROXY",
+    "no_proxy",
+  ]) {
+    delete env[key];
+  }
   if (cursorApiKey) env.CURSOR_API_KEY = cursorApiKey;
   return env;
 }
