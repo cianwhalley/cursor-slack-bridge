@@ -100,7 +100,7 @@ describe("ProgressTracker (OpenClaw-style)", () => {
     const { opts, posts, updates } = baseOpts({
       draftDelaySeconds: 1,
       statusKeepaliveSeconds: 0,
-      replyThreadTs: undefined, // top-level DM: draft only
+      replyThreadTs: undefined, // no Slack thread: draft only, no setStatus
     });
     const p = new ProgressTracker(opts);
     await p.start();

@@ -45,7 +45,7 @@ sequenceDiagram
 
 ## Sessions
 
-- **DMs:** one Cursor chat per Slack IM (`thread_key = "main"`).
+- **DMs:** one Cursor chat per Slack thread (`thread_key =` the user's message `ts`). The bot replies *in that thread* so several DM topics can run at once.
 - **Channels:** one Cursor chat per Slack thread (`thread_key = thread_ts`).
 - **Participation:** after the bot engages a channel thread, allowlisted replies continue without `@mention`. Scheduled outbound posts should call `scripts/mark-participated.mjs` (Socket Mode does not echo your own `chat.postMessage`).
 

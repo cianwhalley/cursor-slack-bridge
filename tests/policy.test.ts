@@ -71,7 +71,27 @@ describe("shouldEngage", () => {
       memParticipation(),
     );
     expect(d.engage).toBe(true);
-    if (d.engage) expect(d.isDm).toBe(true);
+    if (d.engage) {
+      expect(d.isDm).toBe(true);
+      expect(d.threadTs).toBe("1.0");
+    }
+  });
+
+  it("DM thread reply uses the parent thread_ts", () => {
+    const d = shouldEngage(
+      {
+        channel: "D123",
+        channel_type: "im",
+        user: "U_ALLOW",
+        text: "follow",
+        ts: "2.0",
+        thread_ts: "1.0",
+      },
+      config(),
+      memParticipation(),
+    );
+    expect(d.engage).toBe(true);
+    if (d.engage) expect(d.threadTs).toBe("1.0");
   });
 
   it("ignores DM from non-allowlisted user", () => {

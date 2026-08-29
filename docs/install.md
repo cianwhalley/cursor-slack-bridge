@@ -62,9 +62,9 @@ Find your Slack user id in the profile pane (or from a message permalink). Canon
 
 ## 5. Smoke
 
-1. DM the bot: `ping` → Pong + workspace path.
-2. `help` → commands and policy.
-3. A short real ask → ⏳, progress draft, ✅.
+1. DM the bot: `ping` → Pong + workspace path **in a thread** under that ping.
+2. `help` → commands and policy (same thread).
+3. A short real ask → ⏳, progress draft in that thread, ✅. A second top-level DM is a separate topic.
 4. In a channel: invite the bot, `@mention` it.
 
 Logs: `journalctl --user -u cursor-slack@main -f`

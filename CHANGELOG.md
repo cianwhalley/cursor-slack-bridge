@@ -15,6 +15,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - Do **not** wrap the long-lived Node process in `agent-vault run`. MITM `HTTPS_PROXY` made Cursor agent HTTP/2 fail (`SSL routines:tlsv1 alert no application protocol`). Agent children also strip proxy env.
 
+### Changed
+
+- **DMs reply in a thread** under the user's message (one Cursor chat per thread). Top-level composer = new topic; several DM topics can run in parallel. Prompt prefix is `[slack dm thread <ts>]`.
+
 ### Added (earlier)
 
 - Config-driven **Block Kit actions** (`BLOCK_ACTIONS_CONFIG` / `BLOCK_ACTIONS_JSON`): secondary/primary button → hub script, optimistic UI, serialized queue, optional localhost test hook. See `docs/block-actions.md`.

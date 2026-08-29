@@ -54,8 +54,11 @@ export function mentionedBot(text: string, botUserId: string | undefined): boole
   return text.includes(`<@${botUserId}>`);
 }
 
-export function slackPromptPrefix(isDm: boolean, channelId: string): string {
-  if (isDm) return "[slack dm]";
+export function slackPromptPrefix(isDm: boolean, channelId: string, threadTs?: string): string {
+  if (isDm) {
+    const thread = threadTs ? ` thread ${threadTs}` : "";
+    return `[slack dm${thread}]\nOther topics in this DM are other Slack threads — use the slack-history skill if you need them. Do not ask the user to paste logs.`;
+  }
   return `[slack ${channelId}]`;
 }
 
@@ -110,7 +113,7 @@ export function shouldEngage(
       userId,
       text: cleaned,
       messageTs,
-      threadTs: messageTs, // replies still use Slack thread_ts for posting; session key is "main"
+      threadTs: (event.thread_ts || messageTs).trim(),
       isDm: true,
       label: "slack:dm",
     };
@@ -199,7 +202,7 @@ export function bridgeHelpText(opts: {
     "• `help` — this message",
     "",
     "*How to talk*",
-    "• DM: send a message (if you are allowlisted)",
+    "• DM: each top-level message starts a thread (several topics can run at once)",
     "• Channel: `@mention` to start a thread; replies continue without mention",
     "• While a run is in progress, follow-ups queue — send `stop` to cancel",
     "• Voice notes: send a Slack voice message (even with no caption). The bot transcribes it and replies with a voice note.",

@@ -6,9 +6,9 @@ In Slack, send `help` (or `?`) to the bot — no Cursor run.
 
 | Check | Expect |
 |-------|--------|
-| `ping` | `Pong!` + `WORKSPACE` path |
-| `help` | Commands + DM/channel policy |
-| Short DM | ⏳ then a reply from that workspace |
+| `ping` | `Pong!` + `WORKSPACE` path **in a thread** under that ping |
+| `help` | Commands + DM/channel policy (same thread) |
+| Short DM | ⏳ then a reply **in a thread** from that workspace. A second top-level DM is a separate topic. |
 | `journalctl --user -u cursor-slack@main -n 80` | Bolt connected; no token dumps |
 
 ## Socket Mode

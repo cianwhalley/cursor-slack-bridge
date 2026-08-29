@@ -11,7 +11,7 @@ The chat surface is meant to feel like a serious operator bot, not a stack of �
 | Follow-up while busy: “Still working… send `stop`” | Queued DMs used to sit with no ack. Same-ts `message`+`app_mention` is deduped (not a fake queue). |
 | `stop` / `exit` kills the child | Escape hatch; no LLM. |
 | `ping` / `help` | Liveness and rules; no Cursor. |
-| Channel replies stay in the thread | Keep the channel tidy. DMs stay top-level unless you are already in a thread UI. |
+| Channel replies stay in the thread | Keep the channel tidy. DMs: each top-level message starts a thread (composer at the bottom of the DM is a new topic). |
 | `@mention` to start; later replies in that thread need no mention | Same rule as a human teammate who was already in the thread. |
 | Tool lines from Cursor `description` / explain labels | Raw `cd && export …` is unreadable in Slack. |
 | Final text = last assistant bubble | Concatenated `result` and thinking leaked duplicates. |
@@ -44,7 +44,7 @@ Voice notes (no caption) are transcribed in the bridge and the agent is asked to
 ## Not in v1
 
 - Slash commands
-- Thread history backfill (NanoClaw had API/MCP history; the prompt only gets a `[slack dm]` / `[slack C…]` prefix)
+- Thread history backfill in the prompt (use the hub `slack-history` skill on demand; prefix is `[slack dm thread <ts>]` / `[slack C…]`)
 - Live token streaming (draft edits only)
 - Rich bridge commands (git, screenshot, queue depth)
 

@@ -85,9 +85,7 @@ export class MessageRouter {
     this.seenMessageTs.set(dedupeKey, now);
 
     const cmd = isBridgeCommand(decision.text);
-    const replyThreadTs = decision.isDm
-      ? event.thread_ts || undefined // DM: top-level unless already in a thread UI
-      : decision.threadTs;
+    const replyThreadTs = decision.threadTs;
 
     if (cmd === "ping") {
       await slack.poster.post(
@@ -255,7 +253,7 @@ export class MessageRouter {
         sessions.markParticipated(decision.channelId, decision.threadTs);
       }
 
-      const prefix = slackPromptPrefix(decision.isDm, decision.channelId);
+      const prefix = slackPromptPrefix(decision.isDm, decision.channelId, decision.threadTs);
       const ingest = eventHasFiles(event)
         ? await this.ingestEvent(event)
         : { promptAddon: "", inboundVoice: false };

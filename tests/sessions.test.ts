@@ -18,13 +18,23 @@ function open(): SessionStore {
 }
 
 describe("SessionStore", () => {
-  it("shares one Cursor chat for DM main key", () => {
+  it("gives distinct Cursor chats per DM message timestamp", () => {
     const s = open();
-    const { channelId, threadKey } = s.sessionKey(true, "D1", "1.0");
-    expect(threadKey).toBe("main");
-    s.upsert(channelId, threadKey, "chat-a", "slack:dm");
-    const again = s.sessionKey(true, "D1", "2.0");
-    expect(s.get(again.channelId, again.threadKey)?.cursorChatId).toBe("chat-a");
+    const a = s.sessionKey(true, "D1", "1.0");
+    const b = s.sessionKey(true, "D1", "2.0");
+    expect(a.threadKey).toBe("1.0");
+    expect(b.threadKey).toBe("2.0");
+    s.upsert(a.channelId, a.threadKey, "chat-a", "slack:dm");
+    s.upsert(b.channelId, b.threadKey, "chat-b", "slack:dm");
+    expect(s.get("D1", "1.0")?.cursorChatId).toBe("chat-a");
+    expect(s.get("D1", "2.0")?.cursorChatId).toBe("chat-b");
+  });
+
+  it("resumes the same DM chat when thread_ts matches the root", () => {
+    const s = open();
+    s.upsert("D1", "1.0", "chat-a", "slack:dm");
+    const follow = s.sessionKey(true, "D1", "1.0");
+    expect(s.get(follow.channelId, follow.threadKey)?.cursorChatId).toBe("chat-a");
   });
 
   it("gives distinct chats per channel thread", () => {

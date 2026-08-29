@@ -101,8 +101,9 @@ describe("MessageRouter", () => {
 
     expect(runPrompt).toHaveBeenCalled();
     expect(runPrompt.mock.calls[0][0].workspace).toBe("/ws");
-    expect(runPrompt.mock.calls[0][0].prompt).toContain("[slack dm]");
+    expect(runPrompt.mock.calls[0][0].prompt).toContain("[slack dm thread 1.0]");
     expect(slack.posts.some((p) => p.text.includes("hello from agent"))).toBe(true);
+    expect(slack.posts.some((p) => p.thread === "1.0")).toBe(true);
     expect(slack.reactions.some((r) => r.name === "hourglass_flowing_sand" && r.op === "add")).toBe(
       true,
     );
@@ -238,7 +239,37 @@ describe("MessageRouter", () => {
     sessions.close();
   });
 
-  it("queues concurrent messages for same thread", async () => {
+  it("runs two top-level DMs in parallel (separate threads)", async () => {
+    const slack = mockSlack();
+    let concurrent = 0;
+    let maxConcurrent = 0;
+    const runner: AgentRunner = {
+      createChat: vi.fn(async () => "c"),
+      runPrompt: vi.fn(async () => {
+        concurrent++;
+        maxConcurrent = Math.max(maxConcurrent, concurrent);
+        await new Promise((r) => setTimeout(r, 30));
+        concurrent--;
+        return { status: "ok" as const, chatId: "c", text: "x", exitCode: 0, stderr: "" };
+      }),
+      stop: vi.fn(() => false),
+    };
+    const c = cfg();
+    const sessions = new SessionStore(c.sessionDb);
+    const router = new MessageRouter({ config: c, sessions, runner, slack: slack.client });
+    await Promise.all([
+      router.process({ channel: "D1", user: "U1", text: "a", ts: "1" }),
+      router.process({ channel: "D1", user: "U1", text: "b", ts: "2" }),
+    ]);
+    expect(maxConcurrent).toBe(2);
+    expect(runner.createChat).toHaveBeenCalledTimes(2);
+    expect(
+      slack.posts.some((p) => p.text.includes("Still working on your last message")),
+    ).toBe(false);
+    sessions.close();
+  });
+
+  it("queues concurrent replies in the same DM thread", async () => {
     const slack = mockSlack();
     let concurrent = 0;
     let maxConcurrent = 0;
@@ -258,7 +289,13 @@ describe("MessageRouter", () => {
     const router = new MessageRouter({ config: c, sessions, runner, slack: slack.client });
     const first = router.process({ channel: "D1", user: "U1", text: "a", ts: "1" });
     await new Promise((r) => setTimeout(r, 10));
-    const second = router.process({ channel: "D1", user: "U1", text: "b", ts: "2" });
+    const second = router.process({
+      channel: "D1",
+      user: "U1",
+      text: "b",
+      ts: "2",
+      thread_ts: "1",
+    });
     await Promise.all([first, second]);
     expect(maxConcurrent).toBe(1);
     expect(runner.runPrompt).toHaveBeenCalledTimes(2);

@@ -1,7 +1,7 @@
 /**
  * OpenClaw-style Slack progress:
  * - ack reaction on the user message
- * - assistant.threads.setStatus when a reply thread exists (not top-level DMs)
+ * - assistant.threads.setStatus when a reply thread exists (DMs included: we thread under the user message)
  * - one editable draft preview (never a stack of "still working" posts)
  * - final answer replaces the draft in place when possible
  */
@@ -37,7 +37,7 @@ export interface ProgressTrackerOptions {
   assistantStatus?: SlackAssistantStatus;
   channelId: string;
   messageTs: string;
-  /** Where replies / drafts go. Undefined = top-level DM (draft-only, no setStatus). */
+  /** Where replies / drafts go. Always the Slack thread root (DM: the user's message ts). */
   replyThreadTs: string | undefined;
   typingReaction: string;
   streamingMode: StreamingMode;
@@ -71,7 +71,6 @@ export class ProgressTracker {
   private readonly canStatus: boolean;
 
   constructor(private readonly opts: ProgressTrackerOptions) {
-    // OpenClaw: top-level DMs stay off-thread — no native status; use draft preview.
     this.canStatus = Boolean(opts.assistantStatus && opts.replyThreadTs);
   }
 

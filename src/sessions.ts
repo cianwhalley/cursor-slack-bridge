@@ -40,14 +40,8 @@ export class SessionStore implements ThreadParticipationStore {
     this.db.close();
   }
 
-  static dmThreadKey(): string {
-    return "main";
-  }
-
-  sessionKey(isDm: boolean, channelId: string, threadTs: string): { channelId: string; threadKey: string } {
-    if (isDm) {
-      return { channelId, threadKey: SessionStore.dmThreadKey() };
-    }
+  /** One Cursor chat per Slack thread (DMs and channels). */
+  sessionKey(_isDm: boolean, channelId: string, threadTs: string): { channelId: string; threadKey: string } {
     return { channelId, threadKey: threadTs };
   }
 
