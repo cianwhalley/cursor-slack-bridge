@@ -19,6 +19,7 @@ else
 fi
 
 cd "$BRIDGE_DIR"
+chmod +x ops/run-bridge.sh
 if command -v pnpm >/dev/null; then
   pnpm install --frozen-lockfile || pnpm install
   pnpm run build

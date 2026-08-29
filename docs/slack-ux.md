@@ -28,7 +28,7 @@ The chat surface is meant to feel like a serious operator bot, not a stack of �
 | Slack tokens stripped from the agent env | Two bots on one Unix user must not leak each other’s tokens into Cursor. |
 | `SESSION_TIMEOUT_SECONDS` (default 900) | Hung CLI should not hold Slack forever. |
 | Early SIGTERM after `create-chat` prints a UUID | Cursor CLI sometimes prints the id then hangs. |
-| Ignore `bot_id` / most subtypes | Feedback loops. |
+| Ignore `bot_id` / most subtypes | Feedback loops. Empty-caption `file_share` *is* handled (voice notes). |
 | Socket Mode, **not** Slack Agents API | Classic `@mention` + DM; no `agent_view` product coupling. |
 
 ## Commands
@@ -38,6 +38,8 @@ Send as the full message (after mention strip):
 - `ping` — Pong + `WORKSPACE`
 - `stop` / `exit` — kill active run in this session
 - `help` / `?` — this surface, policy, commands
+
+Voice notes (no caption) are transcribed in the bridge and the agent is asked to reply with a voice file (`VOICE_REPLY:`). Other files land in `$WORKSPACE/.slack-inbox/`. Slack apps need **`files:read`**.
 
 ## Not in v1
 

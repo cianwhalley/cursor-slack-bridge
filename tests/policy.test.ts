@@ -219,6 +219,38 @@ describe("shouldEngage", () => {
       shouldEngage({ user: "U_ALLOW", text: "hi", ts: "1" }, config(), memParticipation()).reason,
     ).toBe("missing_channel_or_ts");
   });
+
+  it("engages DM voice/file with empty caption", () => {
+    const d = shouldEngage(
+      {
+        channel: "D123",
+        channel_type: "im",
+        user: "U_ALLOW",
+        text: "",
+        ts: "1.0",
+        files: [{ id: "F1", name: "audio_message.webm", mimetype: "audio/webm" }],
+      },
+      config(),
+      memParticipation(),
+    );
+    expect(d.engage).toBe(true);
+    if (d.engage) expect(d.text).toBe("");
+  });
+
+  it("engages channel @mention that is only a file", () => {
+    const d = shouldEngage(
+      {
+        channel: "C_SYSOPS",
+        user: "U_ALLOW",
+        text: `<@${bot}>`,
+        ts: "1.0",
+        files: [{ id: "F2", name: "notes.pdf", mimetype: "application/pdf" }],
+      },
+      config(),
+      memParticipation(),
+    );
+    expect(d.engage).toBe(true);
+  });
 });
 
 describe("helpers", () => {

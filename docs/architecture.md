@@ -38,6 +38,9 @@ sequenceDiagram
 | `src/stream-events.ts` | Parse `stream-json`; last assistant bubble |
 | `src/oc-tool-display.ts` | Human tool lines |
 | `src/format.ts` | Prompt prefix, chunking |
+| `src/transcription.ts` | OpenRouter / Whisper STT (pre-agent) |
+| `src/slack-files.ts` | Download attachments; inbox + voice prompt |
+| `src/voice-reply.ts` | Parse `VOICE_REPLY:` trailer; path allowlist |
 | `src/blocks.ts` | Block Kit helpers for outbound tick scripts (not chat replies) |
 
 ## Sessions

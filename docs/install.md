@@ -17,7 +17,8 @@ For a starter hub (persona, sibling repos, hygiene, optional tick) use [agent-hu
 1. [api.slack.com](https://api.slack.com/apps) → Create from manifest → paste [`manifest.socket.json`](../manifest.socket.json).
 2. **Enable Socket Mode** in the app settings (required even if an `xapp-` token exists). Create an app-level token with `connections:write`.
 3. Install the app to the workspace. Copy the bot token (`xoxb-`) and app-level token (`xapp-`).
-4. **Do not** enable Slack Agents / `agent_view`. This is a classic bot.
+4. After upgrading an existing app, reinstall so the bot gains **`files:read`** (needed to download user voice notes and files). Keep `files:write` for voice replies.
+5. **Do not** enable Slack Agents / `agent_view`. This is a classic bot.
 
 Bolt may log `Socket Mode is not turned on` if the UI toggle is off — flip it and restart.
 

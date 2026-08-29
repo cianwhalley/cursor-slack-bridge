@@ -3,11 +3,14 @@ import type { AgentRunner } from "./agent-runner.js";
 import { buildPrompt, chunkText } from "./format.js";
 import {
   bridgeHelpText,
+  eventHasFiles,
   isBridgeCommand,
   shouldEngage,
   slackPromptPrefix,
   type SlackEventLike,
 } from "./policy.js";
+import { ingestSlackFiles, VOICE_REPLY_INSTRUCTION, type IngestResult } from "./slack-files.js";
+import { isAllowedVoicePath, splitVoiceReply, unlinkVoiceFile } from "./voice-reply.js";
 import {
   ProgressTracker,
   type SlackAssistantStatus,
@@ -38,6 +41,7 @@ export interface RouterDeps {
   slack: SlackClient;
   /** Queue concurrent messages for the same session key. */
   queueSameThread?: boolean;
+  ingestFiles?: (event: SlackEventLike) => Promise<IngestResult>;
 }
 
 type QueueItem = () => Promise<void>;
@@ -125,7 +129,8 @@ export class MessageRouter {
       return;
     }
 
-    const task = () => this.runAgentTurn(decision, replyThreadTs, sessionKey, channelId, threadKey);
+    const task = () =>
+      this.runAgentTurn(event, decision, replyThreadTs, sessionKey, channelId, threadKey);
     if (this.deps.queueSameThread === false) {
       await task();
       return;
@@ -189,6 +194,7 @@ export class MessageRouter {
   }
 
   private async runAgentTurn(
+    event: SlackEventLike,
     decision: Extract<ReturnType<typeof shouldEngage>, { engage: true }>,
     replyThreadTs: string | undefined,
     sessionKey: string,
@@ -250,7 +256,15 @@ export class MessageRouter {
       }
 
       const prefix = slackPromptPrefix(decision.isDm, decision.channelId);
-      const prompt = buildPrompt(prefix, decision.text);
+      const ingest = eventHasFiles(event)
+        ? await this.ingestEvent(event)
+        : { promptAddon: "", inboundVoice: false };
+      const promptParts = [
+        buildPrompt(prefix, decision.text),
+        ingest.promptAddon,
+        ingest.inboundVoice ? VOICE_REPLY_INSTRUCTION : "",
+      ].filter((p) => p.trim());
+      const prompt = promptParts.join("\n\n");
 
       this.activeRunKeys.set(sessionKey, chatId);
       const { result, autoReason } = await this.runPromptWithFallback({
@@ -290,7 +304,9 @@ export class MessageRouter {
         if (finalAutoReason) {
           text = autoModeReplyPrefix(finalAutoReason) + text;
         }
-        await progress.succeed(text, postChunks, { forcePost: Boolean(finalAutoReason) });
+        await this.deliverReply(text, decision.channelId, replyThreadTs, progress, postChunks, {
+          forcePost: Boolean(finalAutoReason),
+        });
       } else {
         const errText =
           result.status === "timeout"
@@ -305,6 +321,73 @@ export class MessageRouter {
       await progress.fail(
         `Bridge error: ${err instanceof Error ? err.message : String(err)}`,
         postChunks,
+      );
+    }
+  }
+
+  private async ingestEvent(event: SlackEventLike): Promise<IngestResult> {
+    if (this.deps.ingestFiles) {
+      return this.deps.ingestFiles(event);
+    }
+    return ingestSlackFiles({
+      files: event.files ?? [],
+      botToken: this.deps.config.slackBotToken,
+      workspace: this.deps.config.workspace,
+      messageTs: event.ts ?? "",
+    });
+  }
+
+  private async deliverReply(
+    text: string,
+    channelId: string,
+    replyThreadTs: string | undefined,
+    progress: ProgressTracker,
+    postChunks: (text: string) => Promise<void>,
+    opts: { forcePost?: boolean },
+  ): Promise<void> {
+    const { caption, voicePath } = splitVoiceReply(text);
+    const visible = caption || (voicePath ? "Voice note" : "_No text response._");
+    await progress.succeed(visible, postChunks, { forcePost: opts.forcePost });
+
+    if (!voicePath) return;
+
+    const allowed = isAllowedVoicePath(voicePath, this.deps.config.workspace);
+    if (!allowed) {
+      console.warn("[router] VOICE_REPLY path rejected");
+      await this.deps.slack.poster.post(
+        channelId,
+        "Voice file path was not allowed (must be under the workspace or `~/.cache`).",
+        replyThreadTs,
+      );
+      return;
+    }
+
+    const upload = this.deps.slack.poster.uploadFile;
+    if (!upload) {
+      await this.deps.slack.poster.post(
+        channelId,
+        "Voice note was generated but this bridge cannot upload files.",
+        replyThreadTs,
+      );
+      return;
+    }
+
+    try {
+      await upload(channelId, voicePath, {
+        filename: "voice-note.mp3",
+        title: "Voice note",
+        threadTs: replyThreadTs,
+      });
+      await unlinkVoiceFile(voicePath);
+    } catch (err) {
+      console.error(
+        "[router] voice upload failed:",
+        err instanceof Error ? err.message : String(err),
+      );
+      await this.deps.slack.poster.post(
+        channelId,
+        "Voice note upload failed; the text reply is above.",
+        replyThreadTs,
       );
     }
   }

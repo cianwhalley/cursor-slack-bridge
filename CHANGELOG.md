@@ -8,8 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Slack **voice notes + file ingest**: download attachments (`files:read`), transcribe audio in the bridge (OpenRouter / Whisper) as `[Voice message]: …`, stage other files under `$WORKSPACE/.slack-inbox/`. Empty-caption voice notes engage. When inbound was voice, the agent is instructed to reply with `VOICE_REPLY: /path.mp3`; the bridge uploads and deletes the file.
+- `ops/run-bridge.sh` wraps the Node process with Agent Vault MITM (STT keys) plus optional host-file fallback.
+
+### Added (earlier)
+
 - Config-driven **Block Kit actions** (`BLOCK_ACTIONS_CONFIG` / `BLOCK_ACTIONS_JSON`): secondary/primary button → hub script, optimistic UI, serialized queue, optional localhost test hook. See `docs/block-actions.md`.
-- **Auto model fallback** when the pinned Slack model hits fast usage limits (`ActionRequiredError` / “out of usage”): posts `⚡ *Switching to Auto mode*` then retries with `agent --model auto`. Final reply is prefixed `⚡ *Reply via Auto mode*`. Configure with `AGENT_MODEL_FALLBACK` (default `auto`; set `off` to disable).
+- **Auto model fallback** when the pinned Slack model hits fast usage limits (`ActionRequiredError` / “out of usage”): retries with `agent --model auto`. Final reply is prefixed `⚡ *Reply via Auto mode*`. Configure with `AGENT_MODEL_FALLBACK` (default `auto`; set `off` to disable).
 
 ## [0.1.1] - 2026-08-15
 

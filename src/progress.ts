@@ -11,11 +11,18 @@ export interface SlackReactions {
   remove(channel: string, timestamp: string, name: string): Promise<void>;
 }
 
+export type SlackFileUpload = {
+  filename?: string;
+  title?: string;
+  threadTs?: string;
+};
+
 export interface SlackPoster {
   /** Returns message ts when available. */
   post(channel: string, text: string, threadTs?: string): Promise<string | undefined>;
   update?(channel: string, ts: string, text: string): Promise<void>;
   delete?(channel: string, ts: string): Promise<void>;
+  uploadFile?(channel: string, filePath: string, opts?: SlackFileUpload): Promise<void>;
 }
 
 export interface SlackAssistantStatus {

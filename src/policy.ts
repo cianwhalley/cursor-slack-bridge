@@ -1,4 +1,5 @@
 import type { BridgeConfig } from "./config.js";
+import type { SlackFile } from "./slack-files.js";
 
 export type SlackEventLike = {
   type?: string;
@@ -10,7 +11,12 @@ export type SlackEventLike = {
   bot_id?: string;
   subtype?: string;
   channel_type?: string;
+  files?: SlackFile[];
 };
+
+export function eventHasFiles(event: SlackEventLike): boolean {
+  return Array.isArray(event.files) && event.files.length > 0;
+}
 
 export type EngageDecision =
   | {
@@ -73,11 +79,12 @@ export function shouldEngage(
   const text = event.text?.trim() ?? "";
   const messageTs = event.ts?.trim() ?? "";
   const userId = event.user?.trim() ?? "";
+  const hasFiles = eventHasFiles(event);
 
   if (!channelId || !messageTs) {
     return { engage: false, reason: "missing_channel_or_ts" };
   }
-  if (!text) {
+  if (!text && !hasFiles) {
     return { engage: false, reason: "empty_text" };
   }
   if (!userId) {
@@ -94,7 +101,7 @@ export function shouldEngage(
       return { engage: false, reason: "dm_not_allowlisted" };
     }
     const cleaned = stripBotMention(text, config.botUserId);
-    if (!cleaned) {
+    if (!cleaned && !hasFiles) {
       return { engage: false, reason: "empty_text_after_mention_strip" };
     }
     return {
@@ -128,7 +135,7 @@ export function shouldEngage(
 
   if (isThreadReply && participated) {
     const cleaned = stripBotMention(text, config.botUserId);
-    if (!cleaned) {
+    if (!cleaned && !hasFiles) {
       return { engage: false, reason: "empty_text_after_mention_strip" };
     }
     return {
@@ -149,7 +156,7 @@ export function shouldEngage(
   }
 
   const cleaned = stripBotMention(text, config.botUserId);
-  if (!cleaned) {
+  if (!cleaned && !hasFiles) {
     return { engage: false, reason: "empty_text_after_mention_strip" };
   }
 
@@ -195,5 +202,7 @@ export function bridgeHelpText(opts: {
     "• DM: send a message (if you are allowlisted)",
     "• Channel: `@mention` to start a thread; replies continue without mention",
     "• While a run is in progress, follow-ups queue — send `stop` to cancel",
+    "• Voice notes: send a Slack voice message (even with no caption). The bot transcribes it and replies with a voice note.",
+    "• Files (PDF, images, …): saved under `.slack-inbox/` in this workspace — ask to copy into a repo",
   ].join("\n");
 }

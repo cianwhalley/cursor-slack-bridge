@@ -47,6 +47,23 @@ async function main(): Promise<void> {
       async delete(channel: string, ts: string) {
         await web.chat.delete({ channel, ts });
       },
+      async uploadFile(
+        channel: string,
+        filePath: string,
+        opts?: { filename?: string; title?: string; threadTs?: string },
+      ) {
+        const args = {
+          channel_id: channel,
+          file: filePath,
+          filename: opts?.filename ?? "voice-note.mp3",
+          title: opts?.title ?? "Voice note",
+        };
+        if (opts?.threadTs) {
+          await web.files.uploadV2({ ...args, thread_ts: opts.threadTs });
+        } else {
+          await web.files.uploadV2(args);
+        }
+      },
     },
     assistantStatus: {
       async setStatus(channel: string, threadTs: string, status: string) {
@@ -84,6 +101,17 @@ async function main(): Promise<void> {
       ts?: string;
       thread_ts?: string;
       channel_type?: string;
+      files?: Array<{
+        id?: string;
+        name?: string;
+        title?: string;
+        mimetype?: string;
+        filetype?: string;
+        subtype?: string;
+        mode?: string;
+        url_private?: string;
+        url_private_download?: string;
+      }>;
     };
     if (ev.subtype && ev.subtype !== "file_share") {
       return;
@@ -139,6 +167,17 @@ type SlackEventLikeCompat = {
   bot_id?: string;
   subtype?: string;
   channel_type?: string;
+  files?: Array<{
+    id?: string;
+    name?: string;
+    title?: string;
+    mimetype?: string;
+    filetype?: string;
+    subtype?: string;
+    mode?: string;
+    url_private?: string;
+    url_private_download?: string;
+  }>;
 };
 
 main().catch((err) => {

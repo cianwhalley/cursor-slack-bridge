@@ -317,4 +317,93 @@ describe("MessageRouter", () => {
     expect(slack.posts.filter((p) => p.text.includes("Switching to Auto mode")).length).toBe(0);
     sessions.close();
   });
+
+  it("voice-only DM: ingest transcript + voice-reply instruction", async () => {
+    const slack = mockSlack();
+    const runPrompt = vi.fn(async () => ({
+      status: "ok" as const,
+      chatId: "chat-1",
+      text: "ok\nVOICE_REPLY: /ws/out.mp3",
+      exitCode: 0,
+      stderr: "",
+    }));
+    const runner: AgentRunner = {
+      createChat: vi.fn(async () => "chat-1"),
+      runPrompt,
+      stop: vi.fn(() => false),
+    };
+    const uploaded: string[] = [];
+    slack.client.poster.uploadFile = vi.fn(async (_c: string, filePath: string) => {
+      uploaded.push(filePath);
+    });
+    const sessions = new SessionStore(cfg().sessionDb);
+    const ingestFiles = vi.fn(async () => ({
+      promptAddon: "[Voice message]: hello there",
+      inboundVoice: true,
+    }));
+    const router = new MessageRouter({
+      config: cfg(),
+      sessions,
+      runner,
+      slack: slack.client,
+      ingestFiles,
+    });
+
+    await router.process({
+      channel: "D1",
+      channel_type: "im",
+      user: "U1",
+      text: "",
+      ts: "9.0",
+      files: [{ id: "F1", name: "audio_message.webm", mimetype: "audio/webm" }],
+    });
+
+    expect(ingestFiles).toHaveBeenCalledOnce();
+    const prompt = runPrompt.mock.calls[0][0].prompt as string;
+    expect(prompt).toContain("[Voice message]: hello there");
+    expect(prompt).toContain("VOICE_REPLY:");
+    expect(slack.posts.some((p) => p.text.includes("VOICE_REPLY"))).toBe(false);
+    expect(slack.posts.some((p) => p.text.includes("ok") || p.text.includes("Voice note"))).toBe(
+      true,
+    );
+    expect(uploaded).toEqual(["/ws/out.mp3"]);
+    sessions.close();
+  });
+
+  it("rejects VOICE_REPLY outside the allowlist", async () => {
+    const slack = mockSlack();
+    const runner: AgentRunner = {
+      createChat: vi.fn(async () => "chat-1"),
+      runPrompt: vi.fn(async () => ({
+        status: "ok" as const,
+        chatId: "chat-1",
+        text: "hi\nVOICE_REPLY: /etc/passwd.mp3",
+        exitCode: 0,
+        stderr: "",
+      })),
+      stop: vi.fn(() => false),
+    };
+    slack.client.poster.uploadFile = vi.fn(async () => {
+      throw new Error("should not upload");
+    });
+    const sessions = new SessionStore(cfg().sessionDb);
+    const router = new MessageRouter({
+      config: cfg(),
+      sessions,
+      runner,
+      slack: slack.client,
+    });
+
+    await router.process({
+      channel: "D1",
+      channel_type: "im",
+      user: "U1",
+      text: "hi",
+      ts: "3.0",
+    });
+
+    expect(slack.client.poster.uploadFile).not.toHaveBeenCalled();
+    expect(slack.posts.some((p) => p.text.includes("not allowed"))).toBe(true);
+    sessions.close();
+  });
 });

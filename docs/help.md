@@ -22,7 +22,8 @@ Fix: Slack app settings → Socket Mode **enabled**. An `xapp-` token is not eno
 - Not on `ALLOWED_USER_IDS` (canonical `U…`, not a display name).
 - Channel not in `ALERT_CHANNELS` / `OPEN_CHANNELS` while `CHANNEL_POLICY=configured`.
 - Channel message without `@mention` in a thread the bot has never participated in.
-- Event subtype filtered (bot messages, joins).
+- Event subtype filtered (bot messages, joins). Voice notes are `file_share` and are handled.
+- Empty caption on a voice note used to be dropped (`empty_text`); that is fixed. Reinstall the Slack app if `files:read` is missing.
 
 ## Agent never starts
 
