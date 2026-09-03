@@ -305,16 +305,15 @@ describe("MessageRouter", () => {
     sessions.close();
   });
 
-  it("retries with auto on fast usage limit and notifies Slack", async () => {
+  it("retries with the configured model on primary degradation and notifies Slack", async () => {
     const slack = mockSlack();
-    const usageErr =
-      "ActionRequiredError: Increase limits for faster responses You're out of usage. Switch to Auto, or ask your admin to increase your limit to continue.";
+    const modelErr = "The requested model is temporarily unavailable";
     const runPrompt = vi
       .fn()
       .mockResolvedValueOnce({
         status: "error" as const,
         chatId: "chat-1",
-        text: usageErr,
+        text: modelErr,
         exitCode: 1,
         stderr: "",
       })
@@ -330,9 +329,11 @@ describe("MessageRouter", () => {
       runPrompt,
       stop: vi.fn(() => false),
     };
-    const sessions = new SessionStore(cfg().sessionDb);
+    const c = cfg();
+    c.agentModelFallback = "gpt-5.6-sol-medium";
+    const sessions = new SessionStore(c.sessionDb);
     const router = new MessageRouter({
-      config: cfg(),
+      config: c,
       sessions,
       runner,
       slack: slack.client,
@@ -348,10 +349,10 @@ describe("MessageRouter", () => {
 
     expect(runPrompt).toHaveBeenCalledTimes(2);
     expect(runPrompt.mock.calls[0][0].model).toBe("cursor-grok-4.5-high-fast");
-    expect(runPrompt.mock.calls[1][0].model).toBe("auto");
-    expect(slack.posts.some((p) => p.text.includes("Reply via Auto mode"))).toBe(true);
+    expect(runPrompt.mock.calls[1][0].model).toBe("gpt-5.6-sol-medium");
+    expect(slack.posts.some((p) => p.text.includes("Reply via GPT-5.6 Sol"))).toBe(true);
     expect(slack.posts.some((p) => p.text.includes("answer after auto"))).toBe(true);
-    expect(slack.posts.filter((p) => p.text.includes("Switching to Auto mode")).length).toBe(0);
+    expect(slack.posts.filter((p) => p.text.includes("Switching to GPT-5.6 Sol")).length).toBe(0);
     sessions.close();
   });
 

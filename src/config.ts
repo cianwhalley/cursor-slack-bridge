@@ -14,7 +14,7 @@ export interface BridgeConfig {
   workspace: string;
   /** Optional Cursor model id (e.g. cursor-grok-4.5-high-fast). Passed as agent --model. */
   agentModel: string | undefined;
-  /** When primary model hits usage limits, retry with this id (default auto). Set off|none to disable. */
+  /** Retry usage-limit or transient provider failures with this model (default auto). */
   agentModelFallback: string | undefined;
   sessionDb: string;
   dmPolicy: DmPolicy;

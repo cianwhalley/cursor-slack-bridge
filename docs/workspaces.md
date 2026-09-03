@@ -18,7 +18,8 @@ Starter layout: [agent-hub-template](https://github.com/cianwhalley/agent-hub-te
 ~/.config/cursor-slack/ops.env      WORKSPACE=…/slack-workspace/ops-agent
 ~/.config/cursor-slack/family.env   WORKSPACE=…/slack-workspace/family-agent
 # Optional: AGENT_MODEL=cursor-grok-4.5-high-fast
-# Optional: AGENT_MODEL_FALLBACK=auto  (retry on fast usage limit; off to disable)
+# Optional: AGENT_MODEL_FALLBACK=gpt-5.6-sol-medium
+# Retries usage limits or transient provider degradation; off disables it.
 ```
 
 Not in-process routing. Two bots, two hubs, two `repos.json` files. An ops agent never sees the family checkouts unless you put them in its registry.

@@ -2,10 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   AUTO_MODEL,
   agentErrorText,
-  autoModeReplyPrefix,
+  fallbackReplyPrefix,
   isUsageLimitError,
-  shouldRetryWithAuto,
-  switchingToAutoNotice,
+  isTransientModelError,
+  shouldRetryWithFallback,
   usageLimitReason,
 } from "../src/model-fallback.js";
 
@@ -17,11 +17,11 @@ describe("model-fallback", () => {
     expect(usageLimitReason(msg)).toContain("out of usage");
   });
 
-  it("shouldRetryWithAuto when primary is fast and fallback is auto", () => {
+  it("retries a usage limit with the configured fallback", () => {
     expect(
-      shouldRetryWithAuto({
+      shouldRetryWithFallback({
         primaryModel: "cursor-grok-4.5-high-fast",
-        fallbackModel: AUTO_MODEL,
+        fallbackModel: "gpt-5.6-sol-medium",
         errorText: "ActionRequiredError: out of usage",
         status: "error",
       }),
@@ -30,7 +30,7 @@ describe("model-fallback", () => {
 
   it("does not retry when already on auto", () => {
     expect(
-      shouldRetryWithAuto({
+      shouldRetryWithFallback({
         primaryModel: AUTO_MODEL,
         fallbackModel: AUTO_MODEL,
         errorText: "ActionRequiredError: out of usage",
@@ -41,7 +41,7 @@ describe("model-fallback", () => {
 
   it("does not retry unrelated errors", () => {
     expect(
-      shouldRetryWithAuto({
+      shouldRetryWithFallback({
         primaryModel: "cursor-grok-4.5-high-fast",
         fallbackModel: AUTO_MODEL,
         errorText: "ENOENT workspace missing",
@@ -52,7 +52,7 @@ describe("model-fallback", () => {
 
   it("retries when usage limit appears as ok assistant text", () => {
     expect(
-      shouldRetryWithAuto({
+      shouldRetryWithFallback({
         primaryModel: "cursor-grok-4.5-high-fast",
         fallbackModel: AUTO_MODEL,
         errorText: "ActionRequiredError: out of usage",
@@ -61,9 +61,23 @@ describe("model-fallback", () => {
     ).toBe(true);
   });
 
-  it("formats switching notice", () => {
-    expect(switchingToAutoNotice("out of usage")).toContain("Switching to Auto mode");
-    expect(autoModeReplyPrefix("out of usage")).toContain("Reply via Auto mode");
+  it("retries transient provider degradation", () => {
+    expect(isTransientModelError("Model is temporarily unavailable")).toBe(true);
+    expect(
+      shouldRetryWithFallback({
+        primaryModel: "cursor-grok-4.5-high-fast",
+        fallbackModel: "gpt-5.6-sol-medium",
+        errorText: "The model is temporarily unavailable",
+        status: "error",
+      }),
+    ).toBe(true);
+  });
+
+  it("names a configured fallback in Slack", () => {
+    expect(fallbackReplyPrefix("provider degraded", "gpt-5.6-sol-medium")).toContain(
+      "Reply via GPT-5.6 Sol",
+    );
+    expect(fallbackReplyPrefix("out of usage", AUTO_MODEL)).toContain("Reply via Auto");
   });
 
   it("agentErrorText merges stderr and text", () => {

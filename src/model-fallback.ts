@@ -14,6 +14,24 @@ export function isUsageLimitError(text: string): boolean {
   );
 }
 
+/** Transient provider/model failures that are safe to retry on the configured fallback. */
+export function isTransientModelError(text: string): boolean {
+  const t = text.toLowerCase();
+  if (!t.trim()) return false;
+  return (
+    t.includes("service unavailable") ||
+    t.includes("temporarily unavailable") ||
+    (t.includes("model") && t.includes("unavailable")) ||
+    t.includes("model is degraded") ||
+    t.includes("provider is degraded") ||
+    t.includes("overloaded") ||
+    t.includes("at capacity") ||
+    t.includes("upstream error") ||
+    t.includes("bad gateway") ||
+    t.includes("gateway timeout")
+  );
+}
+
 export function agentErrorText(result: {
   status: string;
   text: string;
@@ -33,20 +51,18 @@ export function usageLimitReason(text: string): string {
   return stripped.length > 160 ? `${stripped.slice(0, 157)}…` : stripped;
 }
 
-export function switchingToAutoNotice(reason: string): string {
-  return `⚡ *Switching to Auto mode* — ${reason}. Retrying your message…`;
+export function fallbackModelLabel(model: string | undefined): string {
+  if (!model || model === AUTO_MODEL) return "Auto";
+  if (model.startsWith("gpt-5.6-sol")) return "GPT-5.6 Sol";
+  return model;
 }
 
-export function autoModeReplyPrefix(reason: string): string {
-  return `⚡ *Reply via Auto mode* — ${reason}\n\n`;
+export function fallbackReplyPrefix(reason: string, model?: string): string {
+  return `⚡ *Reply via ${fallbackModelLabel(model)}* — ${reason}\n\n`;
 }
 
-export function progressAutoSwitchLine(reason: string): string {
-  return `⚡ Switching to Auto mode — ${reason}`;
-}
-
-/** True when the pinned model failed and we should retry with fallback. */
-export function shouldRetryWithAuto(opts: {
+/** True when the pinned model failed and we should retry with the configured fallback. */
+export function shouldRetryWithFallback(opts: {
   primaryModel: string | undefined;
   fallbackModel: string | undefined;
   errorText: string;
@@ -55,7 +71,7 @@ export function shouldRetryWithAuto(opts: {
   const { primaryModel, fallbackModel, errorText, status } = opts;
   if (!primaryModel || !fallbackModel) return false;
   if (primaryModel === fallbackModel || primaryModel === AUTO_MODEL) return false;
-  if (!isUsageLimitError(errorText)) return false;
+  if (!isUsageLimitError(errorText) && !isTransientModelError(errorText)) return false;
   if (status === "error" || status === "timeout") return true;
   // Cursor sometimes surfaces the limit as assistant text with exit 0.
   if (status === "ok") return true;

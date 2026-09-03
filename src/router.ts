@@ -20,8 +20,8 @@ import {
 import { progressFromStreamLine } from "./stream-events.js";
 import type { SessionStore } from "./sessions.js";
 import {
-  autoModeReplyPrefix,
-  shouldRetryWithAuto,
+  fallbackReplyPrefix,
+  shouldRetryWithFallback,
   usageLimitReason,
   agentErrorText,
 } from "./model-fallback.js";
@@ -230,7 +230,7 @@ export class MessageRouter {
       const primaryModel = config.agentModel;
       const fallbackModel = config.agentModelFallback;
       let forcedModel: string | undefined;
-      let createAutoReason: string | undefined;
+      let createFallbackReason: string | undefined;
 
       if (!chatId) {
         const created = await this.createChatWithFallback(
@@ -239,7 +239,7 @@ export class MessageRouter {
           fallbackModel,
           primaryModel,
           async (reason) => {
-            createAutoReason = reason;
+            createFallbackReason = reason;
           },
         );
         chatId = created.chatId;
@@ -265,7 +265,7 @@ export class MessageRouter {
       const prompt = promptParts.join("\n\n");
 
       this.activeRunKeys.set(sessionKey, chatId);
-      const { result, autoReason } = await this.runPromptWithFallback({
+      const { result, fallbackReason } = await this.runPromptWithFallback({
         runner,
         config,
         chatId,
@@ -284,14 +284,14 @@ export class MessageRouter {
             void progress.noteProgress(ev.line, ev.statusPhrase);
           }
         },
-        onSwitchingToAuto: async (_reason) => {
-          // Final reply is prefixed with Auto mode — no extra Slack post or draft line.
+        onSwitchingToFallback: async (_reason) => {
+          // Final reply names the fallback model — no extra Slack post or draft line.
         },
-        knownAutoReason: createAutoReason,
+        knownFallbackReason: createFallbackReason,
       });
       this.activeRunKeys.delete(sessionKey);
 
-      const finalAutoReason = autoReason ?? createAutoReason;
+      const finalFallbackReason = fallbackReason ?? createFallbackReason;
 
       if (result.chatId && result.chatId !== chatId) {
         sessions.upsert(channelId, threadKey, result.chatId, decision.label);
@@ -299,11 +299,11 @@ export class MessageRouter {
 
       if (result.status === "ok" || (result.text && result.status !== "error")) {
         let text = result.text || "_No text response._";
-        if (finalAutoReason) {
-          text = autoModeReplyPrefix(finalAutoReason) + text;
+        if (finalFallbackReason) {
+          text = fallbackReplyPrefix(finalFallbackReason, fallbackModel) + text;
         }
         await this.deliverReply(text, decision.channelId, replyThreadTs, progress, postChunks, {
-          forcePost: Boolean(finalAutoReason),
+          forcePost: Boolean(finalFallbackReason),
         });
       } else {
         const errText =
@@ -395,7 +395,7 @@ export class MessageRouter {
     config: BridgeConfig,
     fallbackModel: string | undefined,
     primaryModel: string | undefined,
-    onSwitchingToAuto: (reason: string) => Promise<void>,
+    onSwitchingToFallback: (reason: string) => Promise<void>,
   ): Promise<{ chatId: string; forcedModel?: string }> {
     try {
       const chatId = await runner.createChat(
@@ -408,7 +408,7 @@ export class MessageRouter {
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       if (
-        shouldRetryWithAuto({
+        shouldRetryWithFallback({
           primaryModel,
           fallbackModel,
           errorText: msg,
@@ -416,7 +416,7 @@ export class MessageRouter {
         })
       ) {
         const reason = usageLimitReason(msg);
-        await onSwitchingToAuto(reason);
+        await onSwitchingToFallback(reason);
         const chatId = await runner.createChat(
           config.agentBin,
           config.workspace,
@@ -437,10 +437,10 @@ export class MessageRouter {
     primaryModel: string | undefined;
     fallbackModel: string | undefined;
     skipFallbackRetry?: boolean;
-    knownAutoReason?: string;
+    knownFallbackReason?: string;
     onStdoutLine: (line: string) => void;
-    onSwitchingToAuto: (reason: string) => Promise<void>;
-  }): Promise<{ result: RunPromptResult; autoReason?: string }> {
+    onSwitchingToFallback: (reason: string) => Promise<void>;
+  }): Promise<{ result: RunPromptResult; fallbackReason?: string }> {
     const {
       runner,
       config,
@@ -449,9 +449,9 @@ export class MessageRouter {
       primaryModel,
       fallbackModel,
       skipFallbackRetry,
-      knownAutoReason,
+      knownFallbackReason,
       onStdoutLine,
-      onSwitchingToAuto,
+      onSwitchingToFallback,
     } = opts;
 
     const run = (model: string | undefined) =>
@@ -467,29 +467,29 @@ export class MessageRouter {
       });
 
     let result = await run(primaryModel);
-    let autoReason = knownAutoReason;
+    let fallbackReason = knownFallbackReason;
 
     if (skipFallbackRetry) {
-      return { result, autoReason };
+      return { result, fallbackReason };
     }
 
     const errText = agentErrorText(result);
     if (
-      shouldRetryWithAuto({
+      shouldRetryWithFallback({
         primaryModel,
         fallbackModel,
         errorText: errText,
         status: result.status,
       })
     ) {
-      autoReason = usageLimitReason(errText);
+      fallbackReason = usageLimitReason(errText);
       console.warn(
-        `[router] fast model limit — switching to ${fallbackModel}: ${autoReason}`,
+        `[router] primary model unavailable — switching to ${fallbackModel}: ${fallbackReason}`,
       );
-      await onSwitchingToAuto(autoReason);
+      await onSwitchingToFallback(fallbackReason);
       result = await run(fallbackModel);
     }
 
-    return { result, autoReason };
+    return { result, fallbackReason };
   }
 }

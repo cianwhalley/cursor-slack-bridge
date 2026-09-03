@@ -18,6 +18,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Changed
 
 - **DMs reply in a thread** under the user's message (one Cursor chat per thread). Top-level composer = new topic; several DM topics can run in parallel. Prompt prefix is `[slack dm thread <ts>]`.
+- Model fallback now handles transient provider degradation as well as usage limits, and Slack names the configured fallback instead of always saying “Auto mode.”
 
 ### Added (earlier)
 
