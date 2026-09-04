@@ -21,9 +21,11 @@ import { progressFromStreamLine } from "./stream-events.js";
 import type { SessionStore } from "./sessions.js";
 import {
   fallbackReplyPrefix,
-  shouldRetryWithFallback,
+  shouldRetryModelError,
   usageLimitReason,
   agentErrorText,
+  publicAgentError,
+  resolveFallbackChain,
 } from "./model-fallback.js";
 import type { RunPromptResult } from "./agent-runner.js";
 
@@ -228,22 +230,24 @@ export class MessageRouter {
     try {
       let chatId = sessions.get(channelId, threadKey)?.cursorChatId;
       const primaryModel = config.agentModel;
-      const fallbackModel = config.agentModelFallback;
-      let forcedModel: string | undefined;
+      const fallbackSpecs = config.agentModelFallbacks;
+      let usedModel = primaryModel;
+      const triedModels = new Set<string>();
       let createFallbackReason: string | undefined;
 
       if (!chatId) {
         const created = await this.createChatWithFallback(
           runner,
           config,
-          fallbackModel,
+          fallbackSpecs,
           primaryModel,
           async (reason) => {
             createFallbackReason = reason;
           },
         );
         chatId = created.chatId;
-        forcedModel = created.forcedModel;
+        usedModel = created.usedModel;
+        for (const id of created.triedModels) triedModels.add(id);
         sessions.upsert(channelId, threadKey, chatId, decision.label);
       } else {
         sessions.touch(channelId, threadKey);
@@ -265,14 +269,14 @@ export class MessageRouter {
       const prompt = promptParts.join("\n\n");
 
       this.activeRunKeys.set(sessionKey, chatId);
-      const { result, fallbackReason } = await this.runPromptWithFallback({
+      const { result, fallbackReason, usedModel: replyModel } = await this.runPromptWithFallback({
         runner,
         config,
         chatId,
         prompt,
-        primaryModel: forcedModel ?? primaryModel,
-        fallbackModel,
-        skipFallbackRetry: Boolean(forcedModel),
+        primaryModel: usedModel ?? primaryModel,
+        fallbackSpecs,
+        triedModels,
         onStdoutLine: (line) => {
           const ev = progressFromStreamLine(line, {
             detailMode: config.toolProgressDetail,
@@ -300,18 +304,19 @@ export class MessageRouter {
       if (result.status === "ok" || (result.text && result.status !== "error")) {
         let text = result.text || "_No text response._";
         if (finalFallbackReason) {
-          text = fallbackReplyPrefix(finalFallbackReason, fallbackModel) + text;
+          text = fallbackReplyPrefix(finalFallbackReason, replyModel) + text;
         }
         await this.deliverReply(text, decision.channelId, replyThreadTs, progress, postChunks, {
           forcePost: Boolean(finalFallbackReason),
         });
       } else {
+        const rawErr = result.text || result.stderr || "unknown";
         const errText =
           result.status === "timeout"
             ? "Timed out waiting for the agent."
             : result.status === "stopped"
               ? "Stopped."
-              : `Agent error: ${result.text || result.stderr || "unknown"}`;
+              : `Agent error: ${publicAgentError(rawErr)}`;
         await progress.fail(errText, postChunks);
       }
     } catch (err) {
@@ -393,39 +398,48 @@ export class MessageRouter {
   private async createChatWithFallback(
     runner: AgentRunner,
     config: BridgeConfig,
-    fallbackModel: string | undefined,
+    fallbackSpecs: string[],
     primaryModel: string | undefined,
     onSwitchingToFallback: (reason: string) => Promise<void>,
-  ): Promise<{ chatId: string; forcedModel?: string }> {
-    try {
-      const chatId = await runner.createChat(
+  ): Promise<{ chatId: string; usedModel: string | undefined; triedModels: string[] }> {
+    const tried: string[] = [];
+    const attempt = async (model: string | undefined) => {
+      if (model) tried.push(model);
+      return runner.createChat(
         config.agentBin,
         config.workspace,
         config.cursorApiKey,
-        primaryModel,
+        model,
       );
-      return { chatId };
+    };
+
+    try {
+      const chatId = await attempt(primaryModel);
+      return { chatId, usedModel: primaryModel, triedModels: tried };
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      if (
-        shouldRetryWithFallback({
-          primaryModel,
-          fallbackModel,
-          errorText: msg,
-          status: "error",
-        })
-      ) {
+      let last: unknown = err;
+      let msg = err instanceof Error ? err.message : String(err);
+      if (!shouldRetryModelError(msg, "error")) throw err;
+      const remaining = resolveFallbackChain({
+        primaryModel,
+        fallbackSpecs,
+        errorText: msg,
+        tried,
+      });
+      for (const next of remaining) {
         const reason = usageLimitReason(msg);
         await onSwitchingToFallback(reason);
-        const chatId = await runner.createChat(
-          config.agentBin,
-          config.workspace,
-          config.cursorApiKey,
-          fallbackModel,
-        );
-        return { chatId, forcedModel: fallbackModel };
+        console.warn(`[router] primary model unavailable — switching to ${next}: ${reason}`);
+        try {
+          const chatId = await attempt(next);
+          return { chatId, usedModel: next, triedModels: tried };
+        } catch (inner) {
+          last = inner;
+          msg = inner instanceof Error ? inner.message : String(inner);
+          if (!shouldRetryModelError(msg, "error")) throw inner;
+        }
       }
-      throw err;
+      throw last;
     }
   }
 
@@ -435,20 +449,20 @@ export class MessageRouter {
     chatId: string;
     prompt: string;
     primaryModel: string | undefined;
-    fallbackModel: string | undefined;
-    skipFallbackRetry?: boolean;
+    fallbackSpecs: string[];
+    triedModels: Set<string>;
     knownFallbackReason?: string;
     onStdoutLine: (line: string) => void;
     onSwitchingToFallback: (reason: string) => Promise<void>;
-  }): Promise<{ result: RunPromptResult; fallbackReason?: string }> {
+  }): Promise<{ result: RunPromptResult; fallbackReason?: string; usedModel: string | undefined }> {
     const {
       runner,
       config,
       chatId,
       prompt,
       primaryModel,
-      fallbackModel,
-      skipFallbackRetry,
+      fallbackSpecs,
+      triedModels,
       knownFallbackReason,
       onStdoutLine,
       onSwitchingToFallback,
@@ -468,28 +482,30 @@ export class MessageRouter {
 
     let result = await run(primaryModel);
     let fallbackReason = knownFallbackReason;
+    let usedModel = primaryModel;
+    if (primaryModel) triedModels.add(primaryModel);
 
-    if (skipFallbackRetry) {
-      return { result, fallbackReason };
-    }
-
-    const errText = agentErrorText(result);
-    if (
-      shouldRetryWithFallback({
-        primaryModel,
-        fallbackModel,
+    while (true) {
+      const errText = agentErrorText(result);
+      if (!shouldRetryModelError(errText, result.status)) break;
+      const remaining = resolveFallbackChain({
+        primaryModel: primaryModel ?? usedModel,
+        fallbackSpecs,
         errorText: errText,
-        status: result.status,
-      })
-    ) {
+        tried: triedModels,
+      });
+      const next = remaining[0];
+      if (!next) break;
       fallbackReason = usageLimitReason(errText);
       console.warn(
-        `[router] primary model unavailable — switching to ${fallbackModel}: ${fallbackReason}`,
+        `[router] primary model unavailable — switching to ${next}: ${fallbackReason}`,
       );
       await onSwitchingToFallback(fallbackReason);
-      result = await run(fallbackModel);
+      triedModels.add(next);
+      usedModel = next;
+      result = await run(next);
     }
 
-    return { result, fallbackReason };
+    return { result, fallbackReason, usedModel };
   }
 }

@@ -1,5 +1,6 @@
 import { config as loadDotenv } from "dotenv";
 import { resolve } from "node:path";
+import { DEFAULT_FALLBACK_SPECS } from "./model-fallback.js";
 
 const SLACK_ID_RE = /^[UCDG][A-Z0-9]+$/;
 
@@ -12,10 +13,13 @@ export interface BridgeConfig {
   cursorApiKey: string | undefined;
   agentBin: string;
   workspace: string;
-  /** Optional Cursor model id (e.g. cursor-grok-4.5-high-fast). Passed as agent --model. */
+  /** Optional Cursor model id (e.g. cursor-grok-4.6-high-fast). Passed as agent --model. */
   agentModel: string | undefined;
-  /** Retry usage-limit or transient provider failures with this model (default auto). */
-  agentModelFallback: string | undefined;
+  /**
+   * Retry hops when the pinned model is retired, rate-limited, or degraded.
+   * Default: latest (same options) → Sonnet 5 → GPT Sol. Empty = off.
+   */
+  agentModelFallbacks: string[];
   sessionDb: string;
   dmPolicy: DmPolicy;
   allowedUserIds: Set<string>;
@@ -87,12 +91,13 @@ function parseChannelPolicy(raw: string | undefined): ChannelPolicy {
   throw new Error(`CHANNEL_POLICY must be configured|any, got ${JSON.stringify(raw)}`);
 }
 
-function parseModelFallback(raw: string | undefined): string | undefined {
-  const value = (raw ?? "auto").trim();
-  if (!value || /^(off|none|false|disabled)$/i.test(value)) {
-    return undefined;
-  }
-  return value;
+/** Comma list of hops (`latest,sonnet,sol`). `off` disables. Unset → default chain. */
+export function parseModelFallbacks(raw: string | undefined): string[] {
+  if (raw === undefined) return [...DEFAULT_FALLBACK_SPECS];
+  const value = raw.trim();
+  if (!value) return [...DEFAULT_FALLBACK_SPECS];
+  if (/^(off|none|false|disabled)$/i.test(value)) return [];
+  return value.split(",").map((s) => s.trim()).filter(Boolean);
 }
 
 export function loadConfig(envPath?: string): BridgeConfig {
@@ -121,7 +126,7 @@ export function loadConfig(envPath?: string): BridgeConfig {
     agentBin: process.env.AGENT_BIN?.trim() || "agent",
     workspace: resolve(requireEnv("WORKSPACE")),
     agentModel: process.env.AGENT_MODEL?.trim() || undefined,
-    agentModelFallback: parseModelFallback(process.env.AGENT_MODEL_FALLBACK),
+    agentModelFallbacks: parseModelFallbacks(process.env.AGENT_MODEL_FALLBACK),
     sessionDb: resolve(process.env.SESSION_DB?.trim() || "./cursor-slack.db"),
     dmPolicy,
     allowedUserIds,
@@ -166,4 +171,10 @@ function parseBool(raw: string | undefined, fallback: boolean): boolean {
 }
 
 /** Exported for tests */
-export const _testing = { parseIdList, parseDmPolicy, parseChannelPolicy, SLACK_ID_RE };
+export const _testing = {
+  parseIdList,
+  parseDmPolicy,
+  parseChannelPolicy,
+  parseModelFallbacks,
+  SLACK_ID_RE,
+};

@@ -35,8 +35,8 @@ function cfg(): BridgeConfig {
     progressCommentary: false,
     sessionTimeoutSeconds: 900,
     botUserId: bot,
-    agentModel: "cursor-grok-4.5-high-fast",
-    agentModelFallback: "auto",
+    agentModel: "cursor-grok-4.6-high-fast",
+    agentModelFallbacks: ["latest", "sonnet", "sol"],
   };
 }
 
@@ -330,7 +330,7 @@ describe("MessageRouter", () => {
       stop: vi.fn(() => false),
     };
     const c = cfg();
-    c.agentModelFallback = "gpt-5.6-sol-medium";
+    c.agentModelFallbacks = ["gpt-5.6-sol-medium"];
     const sessions = new SessionStore(c.sessionDb);
     const router = new MessageRouter({
       config: c,
@@ -348,11 +348,62 @@ describe("MessageRouter", () => {
     });
 
     expect(runPrompt).toHaveBeenCalledTimes(2);
-    expect(runPrompt.mock.calls[0][0].model).toBe("cursor-grok-4.5-high-fast");
+    expect(runPrompt.mock.calls[0][0].model).toBe("cursor-grok-4.6-high-fast");
     expect(runPrompt.mock.calls[1][0].model).toBe("gpt-5.6-sol-medium");
-    expect(slack.posts.some((p) => p.text.includes("Reply via GPT-5.6 Sol"))).toBe(true);
+    expect(slack.posts.some((p) => p.text.includes("Reply via GPT Sol"))).toBe(true);
     expect(slack.posts.some((p) => p.text.includes("answer after auto"))).toBe(true);
     expect(slack.posts.filter((p) => p.text.includes("Switching to GPT-5.6 Sol")).length).toBe(0);
+    sessions.close();
+  });
+
+  it("falls back to latest same-options grok when the pinned id is retired", async () => {
+    const slack = mockSlack();
+    const catalogErr =
+      "Cannot use this model: cursor-grok-4.5-high-fast. Available models: auto, cursor-grok-4.6-high-fast, claude-sonnet-5-thinking-high, gpt-5.6-sol-high-fast";
+    const runPrompt = vi
+      .fn()
+      .mockResolvedValueOnce({
+        status: "error" as const,
+        chatId: "chat-1",
+        text: catalogErr,
+        exitCode: 1,
+        stderr: "",
+      })
+      .mockResolvedValueOnce({
+        status: "ok" as const,
+        chatId: "chat-1",
+        text: "Tuesday is Flexible Tutoring",
+        exitCode: 0,
+        stderr: "",
+      });
+    const runner: AgentRunner = {
+      createChat: vi.fn(async () => "chat-1"),
+      runPrompt,
+      stop: vi.fn(() => false),
+    };
+    const c = cfg();
+    c.agentModel = "cursor-grok-4.5-high-fast";
+    const sessions = new SessionStore(c.sessionDb);
+    const router = new MessageRouter({
+      config: c,
+      sessions,
+      runner,
+      slack: slack.client,
+    });
+
+    await router.process({
+      channel: "D1",
+      channel_type: "im",
+      user: "U1",
+      text: "check the schedule",
+      ts: "1.0",
+    });
+
+    expect(runPrompt).toHaveBeenCalledTimes(2);
+    expect(runPrompt.mock.calls[0][0].model).toBe("cursor-grok-4.5-high-fast");
+    expect(runPrompt.mock.calls[1][0].model).toBe("cursor-grok-4.6-high-fast");
+    expect(slack.posts.some((p) => p.text.includes("Reply via Grok 4.6"))).toBe(true);
+    expect(slack.posts.some((p) => p.text.includes("Tuesday is Flexible Tutoring"))).toBe(true);
     sessions.close();
   });
 

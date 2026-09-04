@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Model fallback treats **retired / not-on-account** ids (`Cannot use this model`, catalog dump) as the same retryable class as usage limits and provider degradation. Default hops: **latest same-family same-options** (from the catalog list, else Auto) → **Sonnet 5** → **GPT Sol**. Slack still prefixes `⚡ *Reply via …*`. `AGENT_MODEL_FALLBACK=latest,sonnet,sol` (default); `off` disables.
 - Slack **voice notes + file ingest**: download attachments (`files:read`), transcribe audio in the bridge (OpenRouter / Whisper) as `[Voice message]: …`, stage other files under `$WORKSPACE/.slack-inbox/`. Empty-caption voice notes engage. When inbound was voice, the agent is instructed to reply with `VOICE_REPLY: /path.mp3`; the bridge uploads and deletes the file.
 - `ops/run-bridge.sh` loads instance env + hub vault token. STT uses a one-shot vault curl when no OpenRouter key is in env.
 

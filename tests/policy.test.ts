@@ -37,6 +37,8 @@ function config(over: Partial<BridgeConfig> = {}): BridgeConfig {
     progressCommentary: false,
     sessionTimeoutSeconds: 900,
     botUserId: bot,
+    agentModel: "cursor-grok-4.6-high-fast",
+    agentModelFallbacks: ["latest", "sonnet", "sol"],
     ...over,
   };
 }
