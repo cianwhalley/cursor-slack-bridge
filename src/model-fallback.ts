@@ -232,7 +232,7 @@ function parseVersion(lower: string, family: ModelFamily): number[] {
 
 function remainderTokens(lower: string, family: ModelFamily, version: number[]): string[] {
   let rest = lower;
-  if (family === "grok") rest = rest.replace(/^cursor-grok-\d+(?:\.\d+)*/, "");
+  if (family === "grok") rest = rest.replace(/^(?:cursor-)?grok-\d+(?:\.\d+)*/, "");
   else if (family === "sonnet5") rest = rest.replace(/^claude-sonnet-\d+(?:[.-]\d+)*/, "");
   else if (family === "sol") rest = rest.replace(/^gpt-\d+(?:\.\d+)*-sol/, "");
   else if (version.length) {

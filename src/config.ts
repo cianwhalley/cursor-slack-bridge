@@ -13,7 +13,7 @@ export interface BridgeConfig {
   cursorApiKey: string | undefined;
   agentBin: string;
   workspace: string;
-  /** Optional Cursor model id (e.g. cursor-grok-4.6-high-fast). Passed as agent --model. */
+  /** Optional Cursor model id (e.g. grok-4.7-high-fast). Passed as agent --model. */
   agentModel: string | undefined;
   /**
    * Retry hops when the pinned model is retired, rate-limited, or degraded.

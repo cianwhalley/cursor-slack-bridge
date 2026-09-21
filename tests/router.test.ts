@@ -35,7 +35,7 @@ function cfg(): BridgeConfig {
     progressCommentary: false,
     sessionTimeoutSeconds: 900,
     botUserId: bot,
-    agentModel: "cursor-grok-4.6-high-fast",
+    agentModel: "grok-4.7-high-fast",
     agentModelFallbacks: ["latest", "sonnet", "sol"],
   };
 }
@@ -348,7 +348,7 @@ describe("MessageRouter", () => {
     });
 
     expect(runPrompt).toHaveBeenCalledTimes(2);
-    expect(runPrompt.mock.calls[0][0].model).toBe("cursor-grok-4.6-high-fast");
+    expect(runPrompt.mock.calls[0][0].model).toBe("grok-4.7-high-fast");
     expect(runPrompt.mock.calls[1][0].model).toBe("gpt-5.6-sol-medium");
     expect(slack.posts.some((p) => p.text.includes("Reply via GPT Sol"))).toBe(true);
     expect(slack.posts.some((p) => p.text.includes("answer after auto"))).toBe(true);

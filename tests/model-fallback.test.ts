@@ -148,6 +148,30 @@ describe("model-fallback", () => {
     ]);
   });
 
+  it("picks grok-4.7 as latest even when the catalog dropped the cursor- prefix", () => {
+    const err =
+      "Cannot use this model: cursor-grok-4.6-high-fast. Available models: auto, grok-4.7-high-fast, grok-4.7-medium, cursor-grok-4.6-high-fast, claude-sonnet-5-thinking-high, gpt-5.6-sol-high-fast";
+    expect(
+      resolveFallbackChain({
+        primaryModel: "cursor-grok-4.6-high-fast",
+        fallbackSpecs: ["latest", "sonnet", "sol"],
+        errorText: err,
+      }),
+    ).toEqual(["grok-4.7-high-fast", "claude-sonnet-5-thinking-high", "gpt-5.6-sol-high-fast"]);
+  });
+
+  it("skips latest when already on grok-4.7", () => {
+    const err =
+      "Cannot use this model: grok-4.7-high-fast. Available models: auto, grok-4.7-high-fast, grok-4.7-medium, claude-sonnet-5-thinking-high, gpt-5.6-sol-high-fast";
+    expect(
+      resolveFallbackChain({
+        primaryModel: "grok-4.7-high-fast",
+        fallbackSpecs: ["latest", "sonnet", "sol"],
+        errorText: err,
+      }),
+    ).toEqual(["claude-sonnet-5-thinking-high", "gpt-5.6-sol-high-fast"]);
+  });
+
   it("honors an explicit single fallback id", () => {
     expect(
       resolveFallbackChain({
@@ -185,6 +209,9 @@ describe("model-fallback", () => {
       "Reply via GPT Sol",
     );
     expect(fallbackReplyPrefix("out of usage", AUTO_MODEL)).toContain("Reply via Auto");
+    expect(fallbackReplyPrefix("pinned model is not available", "grok-4.7-high-fast")).toContain(
+      "Reply via Grok 4.7",
+    );
     expect(fallbackReplyPrefix("pinned model is not available", "cursor-grok-4.6-high-fast")).toContain(
       "Reply via Grok 4.6",
     );
