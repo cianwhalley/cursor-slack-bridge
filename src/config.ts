@@ -51,6 +51,8 @@ export interface BridgeConfig {
   progressCommentary: boolean;
   sessionTimeoutSeconds: number;
   botUserId: string | undefined;
+  /** When set, approval trailers and button clicks must use this Slack user id. */
+  approverUserId?: string;
 }
 
 function requireEnv(name: string): string {
@@ -155,7 +157,17 @@ export function loadConfig(envPath?: string): BridgeConfig {
     progressCommentary: parseBool(process.env.PROGRESS_COMMENTARY, false),
     sessionTimeoutSeconds: Number(process.env.SESSION_TIMEOUT_SECONDS ?? "900"),
     botUserId: process.env.BOT_USER_ID?.trim() || undefined,
+    approverUserId: parseOptionalSlackUserId(process.env.APPROVER_USER_ID, "APPROVER_USER_ID"),
   };
+}
+
+function parseOptionalSlackUserId(raw: string | undefined, field: string): string | undefined {
+  const value = raw?.trim();
+  if (!value) return undefined;
+  if (!SLACK_ID_RE.test(value) || !value.startsWith("U")) {
+    throw new Error(`${field}: invalid Slack user ID ${JSON.stringify(value)}`);
+  }
+  return value;
 }
 
 function parseHarness(raw: string | undefined): AgentHarnessName {

@@ -10,6 +10,7 @@ import {
   type SlackEventLike,
 } from "./policy.js";
 import { ingestSlackFiles, VOICE_REPLY_INSTRUCTION, type IngestResult } from "./slack-files.js";
+import { approvalBlocks, approvalEventText, splitApprovalRequest } from "./approvals.js";
 import { isAllowedVoicePath, splitVoiceReply, unlinkVoiceFile } from "./voice-reply.js";
 import {
   ProgressTracker,
@@ -258,7 +259,12 @@ export class MessageRouter {
         sessions.markParticipated(decision.channelId, decision.threadTs);
       }
 
-      const prefix = slackPromptPrefix(decision.isDm, decision.channelId, decision.threadTs);
+      const prefix = slackPromptPrefix(
+        decision.isDm,
+        decision.channelId,
+        decision.threadTs,
+        decision.userId,
+      );
       const ingest = eventHasFiles(event)
         ? await this.ingestEvent(event)
         : { promptAddon: "", inboundVoice: false };
@@ -309,6 +315,7 @@ export class MessageRouter {
         }
         await this.deliverReply(text, decision.channelId, replyThreadTs, progress, postChunks, {
           forcePost: Boolean(finalFallbackReason),
+          requesterUserId: decision.userId,
         });
       } else {
         const rawErr = result.text || result.stderr || "unknown";
@@ -347,11 +354,27 @@ export class MessageRouter {
     replyThreadTs: string | undefined,
     progress: ProgressTracker,
     postChunks: (text: string) => Promise<void>,
-    opts: { forcePost?: boolean },
+    opts: { forcePost?: boolean; requesterUserId?: string },
   ): Promise<void> {
     const { caption, voicePath } = splitVoiceReply(text);
-    const visible = caption || (voicePath ? "Voice note" : "_No text response._");
+    const { text: body, request } = splitApprovalRequest(caption);
+    const visible =
+      body ||
+      (request
+        ? `Asked <@${request.approver}> to approve: ${request.summary}`
+        : voicePath
+          ? "Voice note"
+          : "_No text response._");
     await progress.succeed(visible, postChunks, { forcePost: opts.forcePost });
+    if (request) {
+      await this.dispatchApproval(
+        request,
+        channelId,
+        replyThreadTs,
+        opts.requesterUserId ?? "",
+        Boolean(body),
+      );
+    }
 
     if (!voicePath) return;
 
@@ -394,6 +417,102 @@ export class MessageRouter {
         replyThreadTs,
       );
     }
+  }
+
+  /** Button decision resumes the original thread. Skips Slack engage policy. */
+  async resumeApproval(input: {
+    originChannelId: string;
+    originThreadTs: string;
+    approverUserId: string;
+    status: "approved" | "denied";
+    requestId: string;
+    summary: string;
+  }): Promise<void> {
+    const text = approvalEventText({
+      status: input.status,
+      approver: input.approverUserId,
+      requestId: input.requestId,
+      summary: input.summary,
+    });
+    const isDm = input.originChannelId.startsWith("D");
+    const decision = {
+      engage: true as const,
+      channelId: input.originChannelId,
+      userId: input.approverUserId,
+      text,
+      messageTs: input.originThreadTs,
+      threadTs: input.originThreadTs,
+      isDm,
+      label: `slack:${input.originChannelId}:${input.originThreadTs}`,
+    };
+    const sessionKey = `${input.originChannelId}:${input.originThreadTs}`;
+    await this.enqueue(sessionKey, () =>
+      this.runAgentTurn(
+        {
+          channel: input.originChannelId,
+          user: input.approverUserId,
+          text,
+          ts: input.originThreadTs,
+          thread_ts: input.originThreadTs,
+        },
+        decision,
+        input.originThreadTs,
+        sessionKey,
+        input.originChannelId,
+        input.originThreadTs,
+      ),
+    );
+  }
+
+  private async dispatchApproval(
+    request: { approver: string; summary: string },
+    channelId: string,
+    threadTs: string | undefined,
+    requesterUserId: string,
+    announce: boolean,
+  ): Promise<void> {
+    const bound = this.deps.config.approverUserId;
+    const { poster } = this.deps.slack;
+    if (bound && request.approver !== bound) {
+      await poster.post(
+        channelId,
+        "Approval request ignored: that approver is not allowed.",
+        threadTs,
+      );
+      return;
+    }
+    const row = this.deps.sessions.createPendingApproval({
+      originChannelId: channelId,
+      originThreadTs: threadTs ?? "",
+      requesterUserId,
+      approverUserId: request.approver,
+      summary: request.summary,
+    });
+    if (!poster.openDm || !poster.postBlocks) {
+      await poster.post(
+        channelId,
+        `Approval requested, but this bridge cannot post buttons. id \`${row.id}\``,
+        threadTs,
+      );
+      return;
+    }
+    const dm = await poster.openDm(request.approver);
+    if (!dm) {
+      await poster.post(channelId, "Could not open a DM to the approver.", threadTs);
+      return;
+    }
+    const ts = await poster.postBlocks(
+      dm,
+      `Approval needed: ${request.summary}`,
+      approvalBlocks(row.id, request.summary),
+    );
+    if (ts) this.deps.sessions.attachApprovalMessage(row.id, dm, ts);
+    if (!announce) return;
+    await poster.post(
+      channelId,
+      `Asked <@${request.approver}> to approve: ${request.summary}`,
+      threadTs,
+    );
   }
 
   private async createChatWithFallback(

@@ -441,13 +441,23 @@ export function installBlockActions(opts: InstallBlockActionsOpts): {
     return { ok: true };
   }
 
-  app.action(/.*/, async ({ ack, body, action, client }) => {
+  const onAction = async ({
+    ack,
+    body,
+    action,
+    client,
+  }: {
+    ack: () => Promise<void>;
+    body: unknown;
+    action: unknown;
+    client: WebClient;
+  }) => {
     await ack();
-    const actionId =
+    const clickedId =
       action && typeof action === "object" && "action_id" in action
         ? String((action as { action_id?: string }).action_id || "")
         : "";
-    if (!actionIds.has(actionId)) return;
+    if (!actionIds.has(clickedId)) return;
 
     const userId =
       body && typeof body === "object" && "user" in body
@@ -471,7 +481,7 @@ export function installBlockActions(opts: InstallBlockActionsOpts): {
         : undefined;
 
     await handle({
-      actionId,
+      actionId: clickedId,
       value,
       channel,
       messageTs,
@@ -479,7 +489,10 @@ export function installBlockActions(opts: InstallBlockActionsOpts): {
       client,
       userId,
     });
-  });
+  };
+  for (const id of actionIds) {
+    app.action(id, onAction);
+  }
 
   if (opts.testHook) {
     const hook = createServer((req, res) => {

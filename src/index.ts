@@ -1,6 +1,7 @@
 import { App } from "@slack/bolt";
 import { WebClient } from "@slack/web-api";
 import { HttpsProxyAgent } from "https-proxy-agent";
+import { installApprovalActions } from "./approvals.js";
 import { installBlockActions, loadBlockActionsConfig } from "./block-actions.js";
 import { CursorAgentRunner } from "./agent-runner.js";
 import { loadConfig } from "./config.js";
@@ -69,6 +70,21 @@ async function main(): Promise<void> {
         } else {
           await web.files.uploadV2(args);
         }
+      },
+      async openDm(userId: string) {
+        const opened = await web.conversations.open({ users: userId });
+        const id = opened.channel && "id" in opened.channel ? opened.channel.id : undefined;
+        return typeof id === "string" ? id : undefined;
+      },
+      async postBlocks(channel: string, text: string, blocks: unknown[], threadTs?: string) {
+        const res = await web.chat.postMessage({
+          channel,
+          text,
+          blocks: blocks as never,
+          thread_ts: threadTs,
+          mrkdwn: true,
+        });
+        return typeof res.ts === "string" ? res.ts : undefined;
       },
     },
     assistantStatus: {
@@ -157,6 +173,14 @@ async function main(): Promise<void> {
       `[boot] block-actions groups=${blockActions.groups.map((g) => g.id).join(",")} actions=${[...installed.actionIds].join(",")}`,
     );
   }
+
+  installApprovalActions({
+    app,
+    web,
+    sessions,
+    boundApproverId: config.approverUserId,
+    onDecision: (decision) => router.resumeApproval(decision),
+  });
 
   const shutdown = async () => {
     console.log("[boot] shutting down");

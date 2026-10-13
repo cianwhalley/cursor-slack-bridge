@@ -58,4 +58,41 @@ describe("SessionStore", () => {
     s.markParticipated("C1", "1");
     expect(s.hasParticipated("C1", "1")).toBe(true);
   });
+
+  it("consumes an approval once and rejects the wrong clicker or an expiry", () => {
+    const s = open();
+    const row = s.createPendingApproval({
+      originChannelId: "C1",
+      originThreadTs: "10.0",
+      requesterUserId: "U_BART",
+      approverUserId: "U_CIAN",
+      summary: "wipe user ada",
+    });
+    s.attachApprovalMessage(row.id, "D9", "1.2");
+    expect(s.getPendingApproval(row.id)?.approvalMessageTs).toBe("1.2");
+    expect(s.consumePendingApproval(row.id, "U_OTHER", "approved")).toEqual(
+      expect.objectContaining({ ok: false, reason: "not_approver" }),
+    );
+    expect(s.getPendingApproval(row.id)?.status).toBe("pending");
+    expect(s.consumePendingApproval(row.id, "U_CIAN", "approved").ok).toBe(true);
+    expect(s.consumePendingApproval(row.id, "U_CIAN", "approved")).toEqual(
+      expect.objectContaining({ ok: false, reason: "consumed" }),
+    );
+
+    const expired = s.createPendingApproval({
+      originChannelId: "C1",
+      originThreadTs: "11.0",
+      requesterUserId: "U_BART",
+      approverUserId: "U_CIAN",
+      summary: "old",
+      expiresAt: new Date(Date.now() - 1000).toISOString(),
+    });
+    expect(s.consumePendingApproval(expired.id, "U_CIAN", "approved")).toEqual(
+      expect.objectContaining({ ok: false, reason: "expired" }),
+    );
+    expect(s.consumePendingApproval("missing", "U_CIAN", "denied")).toEqual({
+      ok: false,
+      reason: "unknown",
+    });
+  });
 });

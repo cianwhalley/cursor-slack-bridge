@@ -102,7 +102,9 @@ describe("MessageRouter", () => {
 
     expect(runPrompt).toHaveBeenCalled();
     expect(runPrompt.mock.calls[0][0].workspace).toBe("/ws");
-    expect(runPrompt.mock.calls[0][0].prompt).toContain("[slack dm thread 1.0]");
+    expect(runPrompt.mock.calls[0][0].prompt.startsWith("[slack dm thread 1.0 user U1]")).toBe(
+      true,
+    );
     expect(slack.posts.some((p) => p.text.includes("hello from agent"))).toBe(true);
     expect(slack.posts.some((p) => p.thread === "1.0")).toBe(true);
     expect(slack.reactions.some((r) => r.name === "hourglass_flowing_sand" && r.op === "add")).toBe(
@@ -494,6 +496,71 @@ describe("MessageRouter", () => {
 
     expect(slack.client.poster.uploadFile).not.toHaveBeenCalled();
     expect(slack.posts.some((p) => p.text.includes("not allowed"))).toBe(true);
+    sessions.close();
+  });
+
+  it("strips an approval trailer, DMs the approver, and resumes the same session", async () => {
+    const slack = mockSlack();
+    const blocks: unknown[] = [];
+    slack.client.poster.openDm = vi.fn(async () => "D_CIAN");
+    slack.client.poster.postBlocks = vi.fn(async (_channel: string, _text: string, posted: unknown[]) => {
+      blocks.push(posted);
+      return "900.1";
+    });
+    const runPrompt = vi.fn(async () => ({
+      status: "ok" as const,
+      chatId: "chat-approve",
+      text: 'Need a wipe.\nAPPROVAL_REQUEST: {"approver":"U0A31JRRAGN","summary":"wipe user ada"}',
+      exitCode: 0,
+      stderr: "",
+    }));
+    const runner: AgentRunner = {
+      createChat: vi.fn(async () => "chat-approve"),
+      runPrompt,
+      stop: vi.fn(() => false),
+    };
+    const c = cfg();
+    c.approverUserId = "U0A31JRRAGN";
+    const sessions = new SessionStore(c.sessionDb);
+    const router = new MessageRouter({ config: c, sessions, runner, slack: slack.client });
+
+    await router.process({
+      channel: "D1",
+      channel_type: "im",
+      user: "U1",
+      text: "wipe ada",
+      ts: "4.0",
+    });
+
+    expect(slack.posts.some((p) => p.text.includes("APPROVAL_REQUEST"))).toBe(false);
+    expect(slack.posts.some((p) => p.text.includes("Need a wipe."))).toBe(true);
+    expect(slack.client.poster.openDm).toHaveBeenCalledWith("U0A31JRRAGN");
+    const pending = sessions.getPendingApproval(
+      ((blocks[0] as Array<{ elements?: Array<{ value?: string }> }>)[1]?.elements?.[0]?.value) || "",
+    );
+    expect(pending?.status).toBe("pending");
+    expect(pending?.originThreadTs).toBe("4.0");
+
+    runPrompt.mockResolvedValueOnce({
+      status: "ok" as const,
+      chatId: "chat-approve",
+      text: "Denied. Stopped.",
+      exitCode: 0,
+      stderr: "",
+    });
+    await router.resumeApproval({
+      originChannelId: "D1",
+      originThreadTs: "4.0",
+      approverUserId: "U0A31JRRAGN",
+      status: "denied",
+      requestId: pending?.id || "",
+      summary: "wipe user ada",
+    });
+    const resumed = runPrompt.mock.calls[1][0];
+    expect(resumed.chatId).toBe("chat-approve");
+    expect(resumed.prompt).toContain("[approval event]");
+    expect(resumed.prompt).toContain("user U0A31JRRAGN");
+    expect(resumed.prompt).toContain("status: denied");
     sessions.close();
   });
 });

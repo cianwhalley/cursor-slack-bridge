@@ -5,6 +5,7 @@ import {
   bridgeHelpText,
   isBridgeCommand,
   shouldEngage,
+  slackPromptPrefix,
   stripBotMention,
   type ThreadParticipationStore,
 } from "../src/policy.js";
@@ -299,5 +300,16 @@ describe("helpers", () => {
     expect(text).toContain("`ping`");
     expect(text).toContain("`stop`");
     expect(text).toContain("`help`");
+  });
+
+  it("puts the verified Slack user id in the prompt prefix", () => {
+    expect(slackPromptPrefix(true, "D1", "1.0", "U1")).toContain("[slack dm thread 1.0 user U1]");
+    expect(slackPromptPrefix(false, "C1", "9.0", "U1")).toBe("[slack C1 user U1]");
+    const engaged = shouldEngage(
+      { channel: "D123", channel_type: "im", user: "U_ALLOW", text: "hello", ts: "1.0" },
+      config(),
+      memParticipation(),
+    );
+    expect(engaged.engage && engaged.userId).toBe("U_ALLOW");
   });
 });

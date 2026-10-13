@@ -23,6 +23,13 @@ export interface SlackPoster {
   update?(channel: string, ts: string, text: string): Promise<void>;
   delete?(channel: string, ts: string): Promise<void>;
   uploadFile?(channel: string, filePath: string, opts?: SlackFileUpload): Promise<void>;
+  openDm?(userId: string): Promise<string | undefined>;
+  postBlocks?(
+    channel: string,
+    text: string,
+    blocks: unknown[],
+    threadTs?: string,
+  ): Promise<string | undefined>;
 }
 
 export interface SlackAssistantStatus {
