@@ -16,6 +16,7 @@ function config(over: Partial<BridgeConfig> = {}): BridgeConfig {
     slackBotToken: "xoxb",
     slackAppToken: "xapp",
     cursorApiKey: undefined,
+    harness: "cursor",
     agentBin: "agent",
     workspace: "/tmp/ws",
     sessionDb: "/tmp/s.db",

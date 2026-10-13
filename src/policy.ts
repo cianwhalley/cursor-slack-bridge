@@ -188,10 +188,15 @@ export function bridgeHelpText(opts: {
   workspace: string;
   dmPolicy: string;
   channelPolicy: string;
+  harness?: string;
 }): string {
+  const face =
+    opts.harness === "opencode"
+      ? "This bot is the Slack face of an OpenCode agent on a local workspace."
+      : "This bot is the Slack face of a Cursor agent on a local workspace — not a Cloud Agent.";
   return [
     "*Cursor Slack bridge*",
-    "This bot is the Slack face of a Cursor agent on a local workspace — not a Cloud Agent.",
+    face,
     "",
     `Workspace: \`${opts.workspace}\``,
     `DM policy: \`${opts.dmPolicy}\` · Channel policy: \`${opts.channelPolicy}\``,

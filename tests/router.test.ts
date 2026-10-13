@@ -14,6 +14,7 @@ function cfg(): BridgeConfig {
     slackBotToken: "x",
     slackAppToken: "y",
     cursorApiKey: "k",
+    harness: "cursor",
     agentBin: "agent",
     workspace: "/ws",
     sessionDb: join(mkdtempSync(join(tmpdir(), "r-")), "s.db"),

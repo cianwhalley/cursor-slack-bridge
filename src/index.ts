@@ -1,8 +1,10 @@
 import { App } from "@slack/bolt";
 import { WebClient } from "@slack/web-api";
+import { HttpsProxyAgent } from "https-proxy-agent";
 import { installBlockActions, loadBlockActionsConfig } from "./block-actions.js";
 import { CursorAgentRunner } from "./agent-runner.js";
 import { loadConfig } from "./config.js";
+import { OpenCodeAgentRunner } from "./opencode-runner.js";
 import { MessageRouter } from "./router.js";
 import { SessionStore } from "./sessions.js";
 
@@ -10,16 +12,20 @@ async function main(): Promise<void> {
   const envFile = process.env.CURSOR_SLACK_ENV || process.env.DOTENV_CONFIG_PATH;
   const config = loadConfig(envFile);
 
-  const web = new WebClient(config.slackBotToken);
+  const proxyUrl = process.env.HTTPS_PROXY?.trim() || process.env.https_proxy?.trim();
+  const agent = proxyUrl ? new HttpsProxyAgent(proxyUrl) : undefined;
+  const web = new WebClient(config.slackBotToken, agent ? { agent } : undefined);
   const auth = await web.auth.test();
-  if (!auth.ok || !auth.user_id) {
-    throw new Error(`auth.test failed: ${JSON.stringify(auth)}`);
+  if (!auth.ok || !auth.user_id || !auth.bot_id) {
+    throw new Error("auth.test failed");
   }
   const botUserId = config.botUserId ?? String(auth.user_id);
-  console.log(`[boot] bot_user_id=${botUserId} workspace=${config.workspace}`);
+  console.log(
+    `[boot] bot_user_id=${botUserId} workspace=${config.workspace} harness=${config.harness}`,
+  );
 
   const sessions = new SessionStore(config.sessionDb);
-  const runner = new CursorAgentRunner();
+  const runner = config.harness === "opencode" ? new OpenCodeAgentRunner() : new CursorAgentRunner();
 
   const slack = {
     authBotUserId: botUserId,
@@ -88,6 +94,13 @@ async function main(): Promise<void> {
     token: config.slackBotToken,
     appToken: config.slackAppToken,
     socketMode: true,
+    agent,
+    botUserId,
+    botId: String(auth.bot_id),
+    // Bolt's own auth.test posts the token in the body. A vault proxy replaces
+    // the Authorization header, not that body, so the call fails and races
+    // Socket Mode. The header auth.test above already identified the bot.
+    tokenVerificationEnabled: false,
   });
 
   app.event("message", async ({ event }) => {

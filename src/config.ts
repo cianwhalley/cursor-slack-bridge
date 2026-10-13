@@ -7,9 +7,13 @@ const SLACK_ID_RE = /^[UCDG][A-Z0-9]+$/;
 export type DmPolicy = "allowlist" | "open" | "disabled";
 export type ChannelPolicy = "configured" | "any";
 
+export type AgentHarnessName = "cursor" | "opencode";
+
 export interface BridgeConfig {
   slackBotToken: string;
   slackAppToken: string;
+  /** Which CLI owns the chat. Default `cursor` so existing instances stay unchanged. */
+  harness: AgentHarnessName;
   cursorApiKey: string | undefined;
   agentBin: string;
   workspace: string;
@@ -109,6 +113,7 @@ export function loadConfig(envPath?: string): BridgeConfig {
     loadDotenv();
   }
 
+  const harness = parseHarness(process.env.HARNESS);
   const dmPolicy = parseDmPolicy(process.env.DM_POLICY);
   const channelPolicy = parseChannelPolicy(process.env.CHANNEL_POLICY);
   const allowedUserIds = parseIdList(process.env.ALLOWED_USER_IDS, "ALLOWED_USER_IDS");
@@ -122,11 +127,15 @@ export function loadConfig(envPath?: string): BridgeConfig {
   return {
     slackBotToken: requireEnv("SLACK_BOT_TOKEN"),
     slackAppToken: requireEnv("SLACK_APP_TOKEN"),
+    harness,
     cursorApiKey: process.env.CURSOR_API_KEY?.trim() || undefined,
-    agentBin: process.env.AGENT_BIN?.trim() || "agent",
+    agentBin: process.env.AGENT_BIN?.trim() || (harness === "opencode" ? "opencode" : "agent"),
     workspace: resolve(requireEnv("WORKSPACE")),
     agentModel: process.env.AGENT_MODEL?.trim() || undefined,
-    agentModelFallbacks: parseModelFallbacks(process.env.AGENT_MODEL_FALLBACK),
+    agentModelFallbacks:
+      harness === "opencode" && process.env.AGENT_MODEL_FALLBACK === undefined
+        ? []
+        : parseModelFallbacks(process.env.AGENT_MODEL_FALLBACK),
     sessionDb: resolve(process.env.SESSION_DB?.trim() || "./cursor-slack.db"),
     dmPolicy,
     allowedUserIds,
@@ -147,6 +156,12 @@ export function loadConfig(envPath?: string): BridgeConfig {
     sessionTimeoutSeconds: Number(process.env.SESSION_TIMEOUT_SECONDS ?? "900"),
     botUserId: process.env.BOT_USER_ID?.trim() || undefined,
   };
+}
+
+function parseHarness(raw: string | undefined): AgentHarnessName {
+  const value = (raw ?? "cursor").trim().toLowerCase();
+  if (value === "cursor" || value === "opencode") return value;
+  throw new Error(`HARNESS must be cursor|opencode, got ${JSON.stringify(raw)}`);
 }
 
 function parseStreamingMode(raw: string | undefined): "off" | "progress" {

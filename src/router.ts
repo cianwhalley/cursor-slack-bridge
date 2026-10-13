@@ -105,6 +105,7 @@ export class MessageRouter {
           workspace: cfg.workspace,
           dmPolicy: cfg.dmPolicy,
           channelPolicy: cfg.channelPolicy,
+          harness: cfg.harness,
         }),
         replyThreadTs,
       );

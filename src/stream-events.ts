@@ -54,10 +54,21 @@ export function progressFromStreamObject(
     });
     if (!line) return undefined;
     const name = entry.key.replace(/ToolCall$/, "").toLowerCase();
+    const statusPhrase =
+      typeof obj.statusPhrase === "string" && obj.statusPhrase.trim()
+        ? obj.statusPhrase.trim()
+        : `is running ${name}`;
     return {
       kind: "tool",
       line,
-      statusPhrase: `is running ${name}`,
+      statusPhrase,
+    };
+  }
+  if (type === "progress" && typeof obj.line === "string" && obj.line.trim()) {
+    return {
+      kind: "tool",
+      line: obj.line.trim(),
+      statusPhrase: typeof obj.statusPhrase === "string" ? obj.statusPhrase : undefined,
     };
   }
   // OpenClaw commentary lane defaults off — do not push assistant preambles into the draft.
