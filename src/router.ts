@@ -9,6 +9,7 @@ import {
   slackPromptPrefix,
   type SlackEventLike,
 } from "./policy.js";
+import { loadTurnMemory } from "./memory-context.js";
 import { ingestSlackFiles, VOICE_REPLY_INSTRUCTION, type IngestResult } from "./slack-files.js";
 import { approvalBlocks, approvalEventText, splitApprovalRequest } from "./approvals.js";
 import { isAllowedVoicePath, splitVoiceReply, unlinkVoiceFile } from "./voice-reply.js";
@@ -265,10 +266,12 @@ export class MessageRouter {
         decision.threadTs,
         decision.userId,
       );
+      const memory = await loadTurnMemory(config.memoryDir, decision.userId);
       const ingest = eventHasFiles(event)
         ? await this.ingestEvent(event)
         : { promptAddon: "", inboundVoice: false };
       const promptParts = [
+        memory,
         buildPrompt(prefix, decision.text),
         ingest.promptAddon,
         ingest.inboundVoice ? VOICE_REPLY_INSTRUCTION : "",

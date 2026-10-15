@@ -17,6 +17,7 @@ function cfg(): BridgeConfig {
     harness: "cursor",
     agentBin: "agent",
     workspace: "/ws",
+    memoryDir: "/tmp/missing-ethan-memory",
     sessionDb: join(mkdtempSync(join(tmpdir(), "r-")), "s.db"),
     dmPolicy: "allowlist",
     allowedUserIds: new Set(["U1"]),
@@ -102,9 +103,9 @@ describe("MessageRouter", () => {
 
     expect(runPrompt).toHaveBeenCalled();
     expect(runPrompt.mock.calls[0][0].workspace).toBe("/ws");
-    expect(runPrompt.mock.calls[0][0].prompt.startsWith("[slack dm thread 1.0 user U1]")).toBe(
-      true,
-    );
+    const prompt = runPrompt.mock.calls[0][0].prompt as string;
+    expect(prompt.startsWith("[memory]")).toBe(true);
+    expect(prompt).toContain("[slack dm thread 1.0 user U1]");
     expect(slack.posts.some((p) => p.text.includes("hello from agent"))).toBe(true);
     expect(slack.posts.some((p) => p.thread === "1.0")).toBe(true);
     expect(slack.reactions.some((r) => r.name === "hourglass_flowing_sand" && r.op === "add")).toBe(

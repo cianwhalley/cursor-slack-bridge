@@ -20,6 +20,7 @@ function config(over: Partial<BridgeConfig> = {}): BridgeConfig {
     harness: "cursor",
     agentBin: "agent",
     workspace: "/tmp/ws",
+    memoryDir: "/tmp/missing-ethan-memory",
     sessionDb: "/tmp/s.db",
     dmPolicy: "allowlist",
     allowedUserIds: new Set(["U_ALLOW"]),
