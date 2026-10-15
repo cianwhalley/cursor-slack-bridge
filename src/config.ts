@@ -1,6 +1,8 @@
 import { config as loadDotenv } from "dotenv";
+import { homedir } from "node:os";
 import { resolve } from "node:path";
 import { DEFAULT_FALLBACK_SPECS } from "./model-fallback.js";
+import { defaultMemoryDir } from "./memory-context.js";
 
 const SLACK_ID_RE = /^[UCDG][A-Z0-9]+$/;
 
@@ -17,6 +19,8 @@ export interface BridgeConfig {
   cursorApiKey: string | undefined;
   agentBin: string;
   workspace: string;
+  /** Auto-memory directory. Default `$HOME/.ethan/memory`. */
+  memoryDir: string;
   /** Optional Cursor model id (e.g. grok-4.7-high-fast). Passed as agent --model. */
   agentModel: string | undefined;
   /**
@@ -133,6 +137,7 @@ export function loadConfig(envPath?: string): BridgeConfig {
     cursorApiKey: process.env.CURSOR_API_KEY?.trim() || undefined,
     agentBin: process.env.AGENT_BIN?.trim() || (harness === "opencode" ? "opencode" : "agent"),
     workspace: resolve(requireEnv("WORKSPACE")),
+    memoryDir: resolve(process.env.ETHAN_MEMORY_DIR?.trim() || defaultMemoryDir(homedir())),
     agentModel: process.env.AGENT_MODEL?.trim() || undefined,
     agentModelFallbacks:
       harness === "opencode" && process.env.AGENT_MODEL_FALLBACK === undefined
