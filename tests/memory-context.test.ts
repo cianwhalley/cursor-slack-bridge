@@ -3,7 +3,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { clipMemoryIndex, loadTurnMemory } from "../src/memory-context.js";
+import { clipMemoryIndex, loadTurnMemory, resolveMemoryDir } from "../src/memory-context.js";
 
 describe("loadTurnMemory", () => {
   it("loads the team index and only this speaker", async () => {
@@ -28,6 +28,14 @@ describe("loadTurnMemory", () => {
     const wide = "x".repeat(30_000);
     const byBytes = clipMemoryIndex(wide, 200, 25 * 1024);
     expect(Buffer.byteLength(byBytes, "utf8")).toBeLessThanOrEqual(25 * 1024);
+  });
+
+  it("prefers AGENT_MEMORY_DIR over the Ethan default", () => {
+    expect(resolveMemoryDir({ AGENT_MEMORY_DIR: "/tmp/silas-memory", ETHAN_MEMORY_DIR: "/tmp/ethan" }, "/home/cursor-agent")).toBe(
+      "/tmp/silas-memory",
+    );
+    expect(resolveMemoryDir({ ETHAN_MEMORY_DIR: "/tmp/ethan" }, "/home/cursor-agent")).toBe("/tmp/ethan");
+    expect(resolveMemoryDir({}, "/home/cursor-agent")).toBe("/home/cursor-agent/.ethan/memory");
   });
 
   it("still reminds about policy when the directory is missing", async () => {
