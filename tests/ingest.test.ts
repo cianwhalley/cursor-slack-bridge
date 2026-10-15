@@ -51,4 +51,48 @@ describe("ingestSlackFiles", () => {
     expect(await readFile(staged!, "utf8")).toContain("%PDF-1.4");
     expect(transcribe).toHaveBeenCalledOnce();
   });
+
+  it("keeps the bot token on a Slack file redirect and drops it off Slack", async () => {
+    const workspace = mkdtempSync(join(tmpdir(), "inbox-"));
+    const seen: { url: string; auth: string | null }[] = [];
+    const fetchImpl = vi.fn(async (url: string, init?: RequestInit) => {
+      const headers = new Headers(init?.headers);
+      seen.push({ url: String(url), auth: headers.get("authorization") });
+      if (String(url).endsWith("/audio")) {
+        return new Response(null, {
+          status: 302,
+          headers: { location: "https://files-origin.slack.com/files-pri/audio.m4a" },
+        });
+      }
+      if (String(url).includes("files-origin.slack.com")) {
+        return new Response(null, {
+          status: 302,
+          headers: { location: "https://cdn.example/signed-audio" },
+        });
+      }
+      return new Response(new Uint8Array([9, 9, 9]));
+    }) as unknown as typeof fetch;
+
+    const result = await ingestSlackFiles({
+      files: [
+        {
+          name: "audio_message.m4a",
+          mimetype: "audio/mp4",
+          url_private_download: "https://files.slack.com/audio",
+        },
+      ],
+      botToken: "xoxb-test",
+      workspace,
+      messageTs: "12.35",
+      fetchImpl,
+      transcribe: async () => "[Voice message]: heard",
+    });
+
+    expect(result.inboundVoice).toBe(true);
+    expect(seen.map((hop) => hop.auth)).toEqual([
+      "Bearer xoxb-test",
+      "Bearer xoxb-test",
+      null,
+    ]);
+  });
 });
