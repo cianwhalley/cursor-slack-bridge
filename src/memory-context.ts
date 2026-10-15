@@ -15,6 +15,14 @@ export function defaultMemoryDir(home = homedir()): string {
   return join(home, ".ethan", "memory");
 }
 
+export function resolveMemoryDir(
+  env: NodeJS.ProcessEnv = process.env,
+  home = homedir(),
+): string {
+  const configured = env.AGENT_MEMORY_DIR?.trim() || env.ETHAN_MEMORY_DIR?.trim();
+  return configured || defaultMemoryDir(home);
+}
+
 function speakerFileName(userId: string): string | undefined {
   if (!/^[UW][A-Z0-9]+$/.test(userId)) return undefined;
   return `${userId}.md`;
