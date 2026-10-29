@@ -411,6 +411,7 @@ export function installBlockActions(opts: InstallBlockActionsOpts): {
       value: input.value,
       channel: input.channel,
       message_ts: input.messageTs,
+      user_id: input.userId || "",
     };
     const args = fillArgs(
       hit.role === "secondary" ? hit.group.secondaryArgs : hit.group.primaryArgs,

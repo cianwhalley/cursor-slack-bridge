@@ -30,7 +30,7 @@ See [`ops/block-actions.example.json`](../ops/block-actions.example.json) — on
 | `script` | Hub-relative bash entrypoint |
 | `secondaryActionId` | Per-row discard / trash |
 | `primaryActionId` | Commit / send-all — **ignored while secondary jobs pending** |
-| `secondaryArgs` / `primaryArgs` | CLI argv; `{{value}}` `{{channel}}` `{{message_ts}}` |
+| `secondaryArgs` / `primaryArgs` | CLI argv; `{{value}}` `{{channel}}` `{{message_ts}}` `{{user_id}}` |
 | `idleRefreshArgs` | After secondary drain, run once (restore primary UI) |
 | `optimisticSecondary` | `drop_row_hide_primary` \| `none` |
 | `optimisticPrimary` | `replace_working` \| `none` |
